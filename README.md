@@ -1,8 +1,58 @@
-# template
+# (GoIS) Go Import Server
 
-[![Build & Test Action Status](https://github.com/devnw/template/actions/workflows/build.yml/badge.svg)](https://github.com/devnw/template/actions)
-[![Go Report Card](https://goreportcard.com/badge/go.devnw.com/template)](https://goreportcard.com/report/go.devnw.com/template)
-[![codecov](https://codecov.io/gh/devnw/template/branch/main/graph/badge.svg)](https://codecov.io/gh/devnw/template)
-[![Go Reference](https://pkg.go.dev/badge/go.devnw.com/template.svg)](https://pkg.go.dev/go.devnw.com/template)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+## Description
+
+The Go Import Server is a simple HTTP server which supplies meta tags for Go
+packages so that they can be dynamically imported by Go programs using custom
+import paths.
+
+## Paths
+
+### Go Get Execution
+
+When Go executes a URL request it passes a query string of `go-get=1` to the
+server. This is used to determine whether the server should return a meta tag
+for the package.
+
+### Standard Path Resolution
+
+When an endpoint is resolved for a non-`go-get` request, the server will
+redirect the caller to the package's documentation page or homepage as
+configured.
+
+## Configuration
+
+Configuration is done via a json document.
+
+```json
+
+[
+    {
+        "domain": "example.com",
+        "homepage": "https://example.com/test",
+        "docs": "https://example.com/test/docs",
+        "imports": [
+            {
+                "path": "github.com/example/test",
+                "type:": "git",
+                "url": "https://github.com/example/test.git"
+
+            }
+        ]
+    },
+    {
+        "domain": "example2.com",
+        "homepage": "https://example2.com/test",
+        "docs": "https://example2.com/test/docs",
+        "imports": [
+            {
+                "path": "github.com/example2/test",
+                "type:": "git",
+                "url": "https://github.com/example2/test.git"
+                
+            }
+        ]
+    }
+]
+
+```

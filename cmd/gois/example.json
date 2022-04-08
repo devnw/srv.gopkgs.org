@@ -1,0 +1,44 @@
+{
+    "i.atomizer.io": {
+        "amqp": {
+            "path": "amqp",
+            "type": "git",
+            "repo": "https://atomizer.io",
+            "docs": "https://atomizer.io/docs"
+        },
+        "engine": {
+            "path": "engine",
+            "type": "git",
+            "repo": "https://atomizer.io/engine",
+            "docs": "https://atomizer.io/docs"
+        }
+    },
+    "i.devnw.com": {
+        "alog": {
+            "path": "alog",
+            "type": "git",
+            "repo": "https://devnw.com",
+            "docs": "https://devnw.com/alog/docs"
+        },
+        "dns": {
+            "path": "dns",
+            "type": "git",
+            "repo": "https://devnw.com/",
+            "docs": "https://devnw.com/docs"
+        }
+    },
+    "vpn.benjiv.com": {
+        "demo": {
+            "path": "demo",
+            "type": "git",
+            "repo": "https://benjiv.com/demo"
+        },
+        "hammer": {
+            "path": "hammer",
+            "type": "git",
+            "repo": "https://benjiv.com/hammer",
+            "website": "https://benjiv.com/",
+            "docs": "https://benjiv.com/"
+        }
+    }
+}
