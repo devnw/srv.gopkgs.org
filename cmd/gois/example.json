@@ -1,44 +1,44 @@
 {
-    "i.atomizer.io": {
-        "amqp": {
-            "path": "amqp",
-            "type": "git",
-            "repo": "https://atomizer.io",
-            "docs": "https://atomizer.io/docs"
-        },
-        "engine": {
-            "path": "engine",
-            "type": "git",
-            "repo": "https://atomizer.io/engine",
-            "docs": "https://atomizer.io/docs"
-        }
+  "i.atomizer.io": {
+    "amqp": {
+      "docs": "https://atomizer.io/docs",
+      "path": "amqp",
+      "repo": "https://atomizer.io",
+      "type": "git"
     },
-    "i.devnw.com": {
-        "alog": {
-            "path": "alog",
-            "type": "git",
-            "repo": "https://devnw.com",
-            "docs": "https://devnw.com/alog/docs"
-        },
-        "dns": {
-            "path": "dns",
-            "type": "git",
-            "repo": "https://devnw.com/",
-            "docs": "https://devnw.com/docs"
-        }
-    },
-    "vpn.benjiv.com": {
-        "demo": {
-            "path": "demo",
-            "type": "git",
-            "repo": "https://benjiv.com/demo"
-        },
-        "hammer": {
-            "path": "hammer",
-            "type": "git",
-            "repo": "https://benjiv.com/hammer",
-            "website": "https://benjiv.com/",
-            "docs": "https://benjiv.com/"
-        }
+    "engine": {
+      "docs": "https://atomizer.io/docs",
+      "path": "engine",
+      "repo": "https://atomizer.io/engine",
+      "type": "git"
     }
+  },
+  "i.devnw.com": {
+    "alog": {
+      "docs": "https://devnw.com/alog/docs",
+      "path": "alog",
+      "repo": "https://devnw.com",
+      "type": "git"
+    },
+    "dns": {
+      "docs": "https://devnw.com/docs",
+      "path": "dns",
+      "repo": "https://devnw.com/",
+      "type": "git"
+    }
+  },
+  "vpn.benjiv.com": {
+    "demo": {
+      "path": "demo",
+      "repo": "https://benjiv.com/demo",
+      "type": "git"
+    },
+    "hammer": {
+      "docs": "https://benjiv.com/",
+      "path": "hammer",
+      "repo": "https://benjiv.com/hammer",
+      "type": "git",
+      "website": "https://benjiv.com/"
+    }
+  }
 }
