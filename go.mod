@@ -8,6 +8,7 @@ require (
 	github.com/davecgh/go-spew v1.1.0
 	github.com/lestrrat-go/jwx v1.2.20
 	go.devnw.com/dns v0.0.0-20220226150616-c677701e0167
+	go.structs.dev/gen v1.0.0
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	google.golang.org/genproto v0.0.0-20220228195345-15d65a4533f7
 )
@@ -29,7 +30,6 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.structs.dev/gen v0.0.0-20220302142644-d3a7a5d832aa // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
