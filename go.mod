@@ -8,7 +8,7 @@ require (
 	github.com/davecgh/go-spew v1.1.0
 	github.com/lestrrat-go/jwx v1.2.20
 	go.devnw.com/dns v0.0.0-20220226150616-c677701e0167
-	go.structs.dev/gen v1.0.0
+	go.structs.dev/gen v1.0.1
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	google.golang.org/genproto v0.0.0-20220228195345-15d65a4533f7
 )
