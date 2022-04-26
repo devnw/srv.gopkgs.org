@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"go.devnw.com/dns"
 	"go.devnw.com/gois"
-	. "go.structs.dev/gen"
+	"google.golang.org/api/iterator"
 )
 
 const (
@@ -305,20 +305,22 @@ func domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 
 func domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	aInfo, ok := ctx.Value(ainfo).(auth)
-	if !ok {
-		fmt.Printf("failed to get auth info\n")
-		rw.WriteHeader(http.StatusUnauthorized)
-		sendMessage(rw, &message{"failed to get auth info"})
-		return
-	}
+	email := "benji@devnw.com"
 
-	fmt.Printf(
-		"email: %s; auth provider: %s; auth ID: %s\n",
-		aInfo.email,
-		aInfo.provider,
-		aInfo.id,
-	)
+	// aInfo, ok := ctx.Value(ainfo).(auth)
+	// if !ok {
+	// 	fmt.Printf("failed to get auth info\n")
+	// 	rw.WriteHeader(http.StatusUnauthorized)
+	// 	sendMessage(rw, &message{"failed to get auth info"})
+	// 	return
+	// }
+
+	// fmt.Printf(
+	// 	"email: %s; auth provider: %s; auth ID: %s\n",
+	// 	aInfo.email,
+	// 	aInfo.provider,
+	// 	aInfo.id,
+	// )
 
 	client, err := createClient(ctx)
 	if err != nil {
@@ -328,103 +330,43 @@ func domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domain := "go.devnw.com"
+	domains := []*gois.Host{}
 
 	// var d *firestore.DocumentSnapshot
-	d, err := client.Collection("domains").Doc(domain).Get(ctx)
-	if err != nil {
-		fmt.Printf("failed to get domain: %s\n", err)
-		err = fmt.Errorf(
-			"failed to lookup host [%s] in firestore: %s",
-			domain,
-			err,
-		)
-		rw.WriteHeader(http.StatusInternalServerError)
-		sendMessage(rw, &message{err.Error()})
-		return
+	iter := client.Collection("domains").Where("Owner", "==", email).Limit(1).Documents(ctx)
+
+	for {
+		d, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			fmt.Printf("failed to get domain: %s\n", err)
+			rw.WriteHeader(http.StatusInternalServerError)
+			sendMessage(rw, &message{err.Error()})
+			return
+		}
+
+		h := &gois.Host{}
+		err = d.DataTo(h)
+		if err != nil {
+			fmt.Printf("failed to unmarshal host: %s\n", err)
+			rw.WriteHeader(http.StatusInternalServerError)
+			sendMessage(rw, &message{err.Error()})
+			return
+		}
+
+		domains = append(domains, h)
 	}
 
-	// fmt.Printf("collection data from firebase: %s\n", spew.Sdump(d))
-
-	h := &gois.Host{}
-	err = d.DataTo(h)
-	if err != nil {
-		fmt.Printf("failed to convert data to host: %s\n", err)
-		err = fmt.Errorf(
-			"failed to map host [%s] to object: %s",
-			domain,
-			err,
-		)
-		rw.WriteHeader(http.StatusInternalServerError)
-		sendMessage(rw, &message{err.Error()})
-		return
-	}
-
-	// h.Modules["bk"] = &gois.Module{
-	// 	Domain: "go.devnw.com",
-	// 	Path:   "bk",
-	// 	Proto:  "git",
-	// 	Repo:   u("https://github.com/devnw/bridgekeeper"),
-	// 	Docs:   u("https://pkg.go.dev/go.devnw.com/bk"),
-	// }
-
-	// _, err = client.Collection("domains").Doc(domain).Set(ctx, h)
-	// if err != nil {
-	// 	err = fmt.Errorf(
-	// 		"failed to update host [%s] record: %s",
-	// 		domain,
-	// 		err,
-	// 	)
-	// 	fmt.Printf("%s\n", err)
-	// 	rw.WriteHeader(http.StatusUnauthorized)
-	// 	sendMessage(rw, &message{fmt.Sprintf("%s\n", err)})
-	// 	return
-	// }
-
-	// return
-
-	if h.Token.Validated == nil {
-		// TODO: Set this up to attempt validation
-		fmt.Printf("Awaiting Validation\n")
-		rw.WriteHeader(http.StatusUnauthorized)
-		sendMessage(rw, &message{"Token not yet validated"})
-		return
-	}
-
-	data, err := json.Marshal(struct {
-		Domain      string
-		Owner       string
-		Maintainers []string
-		ValidateBy  time.Time
-		Validated   *time.Time
-		Updated     *time.Time
-		Token       string
-		Modules     []*gois.Module
-	}{
-		Domain: domain,
-		Owner:  "benji@devnw.com",
-		Maintainers: []string{
-			"benji.vesterby@gmail.com",
-			"benji@benjiv.com",
-		},
-		ValidateBy: h.Token.ValidateBy,
-		Validated:  nil,
-		Token:      h.Token.String(),
-		Modules:    Map[string, *gois.Module](h.Modules).Values(),
-	})
+	data, err := json.Marshal(domains)
 	if err != nil {
 		fmt.Printf("failed to marshal host: %s\n", err)
-		err = fmt.Errorf(
-			"failed to marshal host [%s] to JSON: %s",
-			domain,
-			err,
-		)
 		rw.WriteHeader(http.StatusInternalServerError)
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
 
-	// defer fmt.Printf("wrote host data: %s\n", string(data))
 	rw.Write(data)
 }
 
