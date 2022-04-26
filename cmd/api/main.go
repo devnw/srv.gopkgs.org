@@ -79,7 +79,7 @@ func main() {
 		"/domains",
 		// validateToken(
 		// authInfo(
-		http.HandlerFunc(api.domainsHandler),
+		JSON(http.HandlerFunc(api.domainsHandler)),
 		// ),
 		// ),
 	)
@@ -162,6 +162,13 @@ func authInfo(next http.Handler) http.Handler {
 		})
 
 		next.ServeHTTP(rw, req.WithContext(ctxWithToken))
+	})
+}
+
+func JSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(rw, req)
 	})
 }
 
