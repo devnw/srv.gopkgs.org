@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -36,21 +37,40 @@ func u(path string) *url.URL {
 // Compile the regex immediately.
 var DomainReggy = regexp.MustCompile(DOMAINREGEX)
 
-func createClient(ctx context.Context) (*firestore.Client, error) {
+type client struct {
+	*firestore.Client
+}
+
+func (c *client) Domains(ctx context.Context, a auth) firestore.Query {
+	return c.Collection("domains").Where("Owner", "==", a.email)
+}
+
+func createClient(ctx context.Context) (*client, error) {
 	// Sets your Google Cloud Platform project ID.
 	projectID := "gopkgs-342114"
 
-	client, err := firestore.NewClient(ctx, projectID)
+	c, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
 	// Close client when done with
 	// defer client.Close()
-	return client, nil
+	return &client{c}, nil
 }
 
 func main() {
 	fetchTenantKeys()
+	ctx := context.Background()
+
+	client, err := createClient(ctx)
+	if err != nil {
+		fmt.Printf("failed to create client: %s\n", err)
+		return
+	}
+
+	api := &api{
+		c: client,
+	}
 
 	router := http.NewServeMux()
 	router.Handle("/", http.NotFoundHandler())
@@ -59,7 +79,7 @@ func main() {
 		"/domains",
 		// validateToken(
 		// authInfo(
-		http.HandlerFunc(domainsHandler),
+		http.HandlerFunc(api.domainsHandler),
 		// ),
 		// ),
 	)
@@ -145,26 +165,30 @@ func authInfo(next http.Handler) http.Handler {
 	})
 }
 
-func domainsHandler(rw http.ResponseWriter, r *http.Request) {
+type api struct {
+	c *client
+}
+
+func (a *api) domainsHandler(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		log.Printf("GET %s\n", r.URL.Path)
-		domainsHandlerGet(rw, r)
+		a.domainsHandlerGet(rw, r)
 	case http.MethodPut:
 		log.Printf("PUT %s\n", r.URL.Path)
-		domainsHandlerPut(rw, r)
+		a.domainsHandlerPut(rw, r)
 	case http.MethodPost:
 		log.Printf("POST %s\n", r.URL.Path)
-		domainsHandlerPost(rw, r)
+		a.domainsHandlerPost(rw, r)
 	case http.MethodDelete:
 		log.Printf("DELETE %s\n", r.URL.Path)
-		domainsHandlerDelete(rw, r)
+		a.domainsHandlerDelete(rw, r)
 	default:
 		rw.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func domainsHandlerPost(rw http.ResponseWriter, r *http.Request) {
+func (a *api) domainsHandlerPost(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("POST %s\n", r.URL.Path)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -181,20 +205,41 @@ type newDomain struct {
 	Domain string `json:"domain"`
 }
 
-func domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
+func (d *newDomain) validate() error {
+	if d.Domain == "" {
+		return errors.New("domain is empty")
+	}
+
+	if !DomainReggy.MatchString(d.Domain) {
+		return errors.New("domain is invalid")
+	}
+
+	return nil
+}
+
+func Unmarshal[T any](rc io.ReadCloser) (T, error) {
+	defer rc.Close()
+	var t T
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return t, err
+	}
+
+	err = json.Unmarshal(data, &t)
+	if err != nil {
+		return t, err
+	}
+
+	return t, nil
+}
+
+func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	log.Printf("PUT %s\n", r.URL.Path)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		fmt.Printf("failed to read body: %s\n", err)
-		rw.WriteHeader(http.StatusBadRequest)
-		sendMessage(rw, &message{err.Error()})
-		return
-	}
 
-	domain := &newDomain{}
-	err = json.Unmarshal(body, domain)
+	domain, err := Unmarshal[newDomain](r.Body)
 	if err != nil {
 		fmt.Printf("failed to unmarshal body: %s\n", err)
 		rw.WriteHeader(http.StatusBadRequest)
@@ -202,22 +247,26 @@ func domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !DomainReggy.MatchString(domain.Domain) {
-		fmt.Printf("domain %s is invalid\n", domain.Domain)
-		rw.WriteHeader(http.StatusBadRequest)
-		sendMessage(rw, &message{"domain is invalid"})
-		return
-	}
-
-	client, err := createClient(ctx)
+	err = domain.validate()
 	if err != nil {
-		fmt.Printf("failed to create client: %s\n", err)
-		rw.WriteHeader(http.StatusInternalServerError)
+		fmt.Printf("failed to validate domain: %s\n", err)
+		rw.WriteHeader(http.StatusBadRequest)
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
 
-	_, err = client.Collection("domains").Doc(domain.Domain).Get(ctx)
+	// client, err := createClient(ctx)
+	// if err != nil {
+	// 	fmt.Printf("failed to create client: %s\n", err)
+	// 	rw.WriteHeader(http.StatusInternalServerError)
+	// 	sendMessage(rw, &message{err.Error()})
+	// 	return
+	// }
+
+	// TODO: set this up so that if a domain exists but is not validated it
+	// can be migrated to a new user and be validated.
+	// This should happen after the current token is expired or invalidated.
+	_, err = a.c.Collection("domains").Doc(domain.Domain).Get(ctx)
 	if err == nil {
 		fmt.Printf("domain %s already exists\n", domain.Domain)
 		rw.WriteHeader(http.StatusBadRequest)
@@ -225,6 +274,7 @@ func domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate domain challenge token
 	token, err := dns.NewToken(domain.Domain, GOPKGSKEY, &timeout)
 	if err != nil {
 		fmt.Printf("failed to create token: %s\n", err)
@@ -240,7 +290,7 @@ func domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		Token:  token,
 	}
 
-	_, err = client.Collection("domains").Doc(domain.Domain).Create(ctx, host)
+	_, err = a.c.Collection("domains").Doc(domain.Domain).Create(ctx, host)
 	if err != nil {
 		fmt.Printf("failed to create domain: %s\n", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -259,7 +309,7 @@ func domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 	rw.Write(data)
 }
 
-func domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
+func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// aInfo, ok := ctx.Value(ainfo).(auth)
 	// if !ok {
@@ -269,6 +319,8 @@ func domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
+	owner := "benji@devnw.com"
+
 	log.Printf("DELETE %s\n", r.URL.Path)
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -277,16 +329,19 @@ func domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := createClient(ctx)
-	if err != nil {
-		fmt.Printf("failed to create client: %s\n", err)
-		rw.WriteHeader(http.StatusInternalServerError)
-		sendMessage(rw, &message{err.Error()})
-		return
-	}
+	// client, err := createClient(ctx)
+	// if err != nil {
+	// 	fmt.Printf("failed to create client: %s\n", err)
+	// 	rw.WriteHeader(http.StatusInternalServerError)
+	// 	sendMessage(rw, &message{err.Error()})
+	// 	return
+	// }
 
 	// var d *firestore.DocumentSnapshot
-	d, err := client.Collection("domains").Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, auth{
+		email: owner,
+	}).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -303,9 +358,9 @@ func domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
+func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	email := "benji@devnw.com"
+	owner := "benji@devnw.com"
 
 	// aInfo, ok := ctx.Value(ainfo).(auth)
 	// if !ok {
@@ -322,18 +377,20 @@ func domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	// 	aInfo.id,
 	// )
 
-	client, err := createClient(ctx)
-	if err != nil {
-		fmt.Printf("failed to create client: %s\n", err)
-		rw.WriteHeader(http.StatusInternalServerError)
-		sendMessage(rw, &message{err.Error()})
-		return
-	}
+	// client, err := createClient(ctx)
+	// if err != nil {
+	// 	fmt.Printf("failed to create client: %s\n", err)
+	// 	rw.WriteHeader(http.StatusInternalServerError)
+	// 	sendMessage(rw, &message{err.Error()})
+	// 	return
+	// }
 
 	domains := []*gois.Host{}
 
 	// var d *firestore.DocumentSnapshot
-	iter := client.Collection("domains").Where("Owner", "==", email).Limit(1).Documents(ctx)
+	iter := a.c.Domains(ctx, auth{
+		email: owner,
+	}).Limit(1).Documents(ctx)
 
 	for {
 		d, err := iter.Next()
