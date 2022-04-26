@@ -377,7 +377,6 @@ func addDomains(ctx context.Context) {
 }
 
 func serve(ctx context.Context) {
-
 	dm, err := New(ctx, "gopkgs-342114")
 	if err != nil {
 		panic(err)
@@ -717,7 +716,6 @@ func (dc *DomainManager) VerifyHost(ctx context.Context, domain string) (host *g
 
 	if h.Token.Validated == nil ||
 		h.Token.Updated.Before(time.Now().Add(-24*time.Hour)) {
-
 		err = h.Token.Verify(ctx, net.DefaultResolver)
 		if err != nil {
 			err = fmt.Errorf(

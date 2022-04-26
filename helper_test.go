@@ -14,7 +14,7 @@ import (
 func PkgRequests(paths ...string) []*http.Request {
 	reqs := make([]*http.Request, len(paths))
 	for i, p := range paths {
-		r, _ := http.NewRequest("GET", p, nil)
+		r, _ := http.NewRequest("GET", p, http.NewRequest("GET", p, http.NoBody))
 		reqs[i] = r
 	}
 	return reqs

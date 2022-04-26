@@ -13,6 +13,8 @@ import (
 	"go.devnw.com/dns"
 )
 
+const GOPKGS = "https://gopkgs.org"
+
 type Protocol string
 
 const (
@@ -150,10 +152,7 @@ type Module struct {
 	Path   string
 	Proto  Protocol
 	Repo   *url.URL
-
-	// Additional Information Pages
-	Site *url.URL
-	Docs *url.URL
+	Docs   *url.URL
 }
 
 //go:embed template.go.html
@@ -162,7 +161,6 @@ var fs embed.FS
 var tmpl = template.Must(template.ParseFS(fs, "template.go.html"))
 
 func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
-
 	log.Printf("Serving Module: %+v\n", m)
 
 	// Redirect the user to the documentation address if available
@@ -172,10 +170,8 @@ func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		redirectURL := m.Docs
 		if redirectURL == nil {
-			redirectURL = m.Site
-			if redirectURL == nil {
-				redirectURL = m.Repo
-			}
+			u, _ := url.Parse(GOPKGS)
+			redirectURL = u
 		}
 		log.Printf("Serving Module: %+v; REDIRECT\n", m)
 
@@ -193,28 +189,21 @@ func (m *Module) ModImport() string {
 }
 
 func (m Module) MarshalJSON() ([]byte, error) {
-	var site string
-	if m.Site != nil {
-		site = m.Site.String()
-	}
-
 	var docs string
 	if m.Docs != nil {
 		docs = m.Docs.String()
 	}
 
 	out := struct {
-		Path    string `json:"path"`
-		Proto   string `json:"type"`
-		Repo    string `json:"repo"`
-		Website string `json:"website,omitempty"`
-		Docs    string `json:"docs,omitempty"`
+		Path  string `json:"path"`
+		Proto string `json:"type"`
+		Repo  string `json:"repo"`
+		Docs  string `json:"docs,omitempty"`
 	}{
-		Path:    m.Path,
-		Proto:   string(m.Proto),
-		Repo:    m.Repo.String(),
-		Website: site,
-		Docs:    docs,
+		Path:  m.Path,
+		Proto: string(m.Proto),
+		Repo:  m.Repo.String(),
+		Docs:  docs,
 	}
 
 	data, err := json.Marshal(out)
@@ -227,11 +216,10 @@ func (m Module) MarshalJSON() ([]byte, error) {
 
 func (m *Module) UnmarshalJSON(data []byte) error {
 	mod := struct {
-		Path    string `json:"path"`
-		Proto   string `json:"type"`
-		Repo    string `json:"repo"`
-		Website string `json:"website,omitempty"`
-		Docs    string `json:"docs,omitempty"`
+		Path  string `json:"path"`
+		Proto string `json:"type"`
+		Repo  string `json:"repo"`
+		Docs  string `json:"docs,omitempty"`
 	}{}
 
 	err := json.Unmarshal(data, &mod)
@@ -244,13 +232,6 @@ func (m *Module) UnmarshalJSON(data []byte) error {
 	m.Repo, err = url.Parse(mod.Repo)
 	if err != nil {
 		return err
-	}
-
-	if mod.Website != "" {
-		m.Site, err = url.Parse(mod.Website)
-		if err != nil {
-			return err
-		}
 	}
 
 	if mod.Docs != "" {

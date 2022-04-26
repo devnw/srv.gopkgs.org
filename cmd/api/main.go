@@ -390,7 +390,7 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	// var d *firestore.DocumentSnapshot
 	iter := a.c.Domains(ctx, auth{
 		email: owner,
-	}).Limit(1).Documents(ctx)
+	}).Documents(ctx)
 
 	for {
 		d, err := iter.Next()
