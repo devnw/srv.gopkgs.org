@@ -139,9 +139,7 @@ func (h Host) MarshalJSON() ([]byte, error) {
 
 type Module struct {
 	Domain string `firestore:"-"`
-	ID     string
 	Path   string
-	Owner  string
 	Proto  Protocol
 	Repo   *url.URL
 	Docs   *url.URL
