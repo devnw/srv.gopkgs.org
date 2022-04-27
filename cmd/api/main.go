@@ -74,17 +74,26 @@ func main() {
 
 	router := http.NewServeMux()
 	router.Handle("/", http.NotFoundHandler())
-	// router.Handle("/api/messages/public", http.HandlerFunc(publicApiHandler))
+
 	router.Handle(
 		"/domains",
 		// validateToken(
 		// authInfo(
-		JSON(http.HandlerFunc(api.domainsHandler)),
+		http.HandlerFunc(api.domainsHandler),
 		// ),
 		// ),
 	)
-	// router.Handle("/domains/go.devnw.com/", validateToken(http.HandlerFunc(domainHandler)))
-	routerWithCORS := handleCORS(router)
+
+	router.Handle(
+		"/modules",
+		// validateToken(
+		// authInfo(
+		http.HandlerFunc(api.modulesHandler),
+		// ),
+		// ),
+	)
+
+	routerWithCORS := handleCORS(JSON(router)) // Move validate token and auth info to here
 
 	server := &http.Server{
 		Addr:    ":6060",
@@ -192,6 +201,133 @@ func (a *api) domainsHandler(rw http.ResponseWriter, r *http.Request) {
 		a.domainsHandlerDelete(rw, r)
 	default:
 		rw.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (a *api) modulesHandler(rw http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	// case http.MethodGet:
+	// 	log.Printf("GET %s\n", r.URL.Path)
+	// 	a.domainsHandlerGet(rw, r)
+	case http.MethodPost:
+		log.Printf("POST %s\n", r.URL.Path)
+		a.moduleHandlerPost(rw, r)
+	case http.MethodDelete:
+		log.Printf("DELETE %s\n", r.URL.Path)
+		a.moduleHandlerDelete(rw, r)
+	default:
+		rw.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+type mod struct {
+	ID      string `json:"id"`
+	Modules []*gois.Module
+}
+
+func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	owner := "benji@devnw.com"
+
+	log.Printf("POST %s\n", r.URL.Path)
+
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("failed to read body: %s\n", err)
+		rw.WriteHeader(http.StatusBadRequest)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	m := &mod{}
+	err = json.Unmarshal(data, m)
+	if err != nil {
+		log.Printf("failed to unmarshal body: %s\n", err)
+		rw.WriteHeader(http.StatusBadRequest)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	d, err := a.c.Domains(ctx, auth{
+		email: owner,
+	}).Where("ID", "==", m.ID).Limit(1).Documents(ctx).Next()
+
+	if err != nil {
+		fmt.Printf("failed to get domain: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	updates := []firestore.Update{}
+	for _, mod := range m.Modules {
+		updates = append(
+			updates,
+			firestore.Update{
+				Path:  fmt.Sprintf("Modules.%s", mod.Path),
+				Value: mod,
+			},
+		)
+	}
+
+	_, err = d.Ref.Update(ctx, updates)
+	if err != nil {
+		fmt.Printf("failed to update domain: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	data, err = json.Marshal(m.Modules)
+	if err != nil {
+		fmt.Printf("failed to marshal modules: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	rw.Write(data)
+}
+
+func (a *api) moduleHandlerDelete(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	owner := "benji@devnw.com"
+
+	log.Printf("DELETE %s\n", r.URL.Path)
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		rw.WriteHeader(http.StatusBadRequest)
+		sendMessage(rw, &message{"missing ID"})
+		return
+	}
+
+	mod := r.URL.Query().Get("mod")
+	if mod == "" {
+		rw.WriteHeader(http.StatusBadRequest)
+		sendMessage(rw, &message{"missing mod"})
+		return
+	}
+
+	d, err := a.c.Domains(ctx, auth{
+		email: owner,
+	}).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+
+	if err != nil {
+		fmt.Printf("failed to get domain: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	_, err = d.Ref.Update(ctx, []firestore.Update{
+		{Path: fmt.Sprintf("Modules.%s", mod), Value: firestore.Delete},
+	})
+	if err != nil {
+		fmt.Printf("failed to update domain: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
 	}
 }
 
@@ -432,16 +568,4 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	rw.Write(data)
-}
-
-func publicApiHandler(rw http.ResponseWriter, _ *http.Request) {
-	sendMessage(rw, publicMessage)
-}
-
-func protectedApiHandler(rw http.ResponseWriter, _ *http.Request) {
-	sendMessage(rw, protectedMessage)
-}
-
-func adminApiHandler(rw http.ResponseWriter, _ *http.Request) {
-	sendMessage(rw, adminMessage)
 }

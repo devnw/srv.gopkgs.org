@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/uuid"
 	"go.devnw.com/dns"
 )
 
@@ -148,7 +149,8 @@ func (h Host) MarshalJSON() ([]byte, error) {
 // }
 
 type Module struct {
-	Domain string
+	Domain string `firestore:"-"`
+	ID     string
 	Path   string
 	Proto  Protocol
 	Repo   *url.URL
@@ -195,11 +197,13 @@ func (m Module) MarshalJSON() ([]byte, error) {
 	}
 
 	out := struct {
+		ID    string `json:"id"`
 		Path  string `json:"path"`
 		Proto string `json:"type"`
 		Repo  string `json:"repo"`
 		Docs  string `json:"docs,omitempty"`
 	}{
+		ID:    m.ID,
 		Path:  m.Path,
 		Proto: string(m.Proto),
 		Repo:  m.Repo.String(),
@@ -216,6 +220,7 @@ func (m Module) MarshalJSON() ([]byte, error) {
 
 func (m *Module) UnmarshalJSON(data []byte) error {
 	mod := struct {
+		ID    string `json:"id"`
 		Path  string `json:"path"`
 		Proto string `json:"type"`
 		Repo  string `json:"repo"`
@@ -239,6 +244,11 @@ func (m *Module) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	m.ID = mod.ID
+	if m.ID == "" {
+		m.ID = uuid.New().String()
 	}
 
 	return nil
