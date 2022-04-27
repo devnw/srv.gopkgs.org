@@ -10,7 +10,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/google/uuid"
 	"go.devnw.com/dns"
 )
 
@@ -42,40 +41,30 @@ const (
 type Records []*Host
 
 type Host struct {
-	ID          string
-	Domain      string
-	Owner       string
-	Maintainers map[string]bool
-	Token       *dns.Token
-	Modules     map[string]*Module
+	ID      string
+	Domain  string
+	Owner   string
+	Token   *dns.Token
+	Modules map[string]*Module
 }
 
 func (h Host) MarshalJSON() ([]byte, error) {
 	out := struct {
-		ID          string    `json:"id"`
-		Domain      string    `json:"domain"`
-		Owner       string    `json:"owner"`
-		Maintainers []string  `json:"maintainers"`
-		Token       string    `json:"token"`
-		Validated   bool      `json:"validated"`
-		ValidateBy  time.Time `json:"validate_by"`
-		Modules     []*Module
+		ID         string    `json:"id"`
+		Domain     string    `json:"domain"`
+		Owner      string    `json:"owner"`
+		Token      string    `json:"token"`
+		Validated  bool      `json:"validated"`
+		ValidateBy time.Time `json:"validate_by"`
+		Modules    []*Module
 	}{
-		ID:          h.ID,
-		Domain:      h.Domain,
-		Owner:       h.Owner,
-		Maintainers: []string{},
-		Token:       h.Token.String(),
-		Validated:   h.Token.Validated != nil,
-		ValidateBy:  h.Token.ValidateBy,
-		Modules:     make([]*Module, 0, len(h.Modules)),
-	}
-
-	// Append the maintainers
-	for k, v := range h.Maintainers {
-		if v {
-			out.Maintainers = append(out.Maintainers, k)
-		}
+		ID:         h.ID,
+		Domain:     h.Domain,
+		Owner:      h.Owner,
+		Token:      h.Token.String(),
+		Validated:  h.Token.Validated != nil,
+		ValidateBy: h.Token.ValidateBy,
+		Modules:    make([]*Module, 0, len(h.Modules)),
 	}
 
 	// Append the modules
@@ -152,6 +141,7 @@ type Module struct {
 	Domain string `firestore:"-"`
 	ID     string
 	Path   string
+	Owner  string
 	Proto  Protocol
 	Repo   *url.URL
 	Docs   *url.URL
@@ -197,13 +187,11 @@ func (m Module) MarshalJSON() ([]byte, error) {
 	}
 
 	out := struct {
-		ID    string `json:"id"`
 		Path  string `json:"path"`
 		Proto string `json:"type"`
 		Repo  string `json:"repo"`
 		Docs  string `json:"docs,omitempty"`
 	}{
-		ID:    m.ID,
 		Path:  m.Path,
 		Proto: string(m.Proto),
 		Repo:  m.Repo.String(),
@@ -220,7 +208,6 @@ func (m Module) MarshalJSON() ([]byte, error) {
 
 func (m *Module) UnmarshalJSON(data []byte) error {
 	mod := struct {
-		ID    string `json:"id"`
 		Path  string `json:"path"`
 		Proto string `json:"type"`
 		Repo  string `json:"repo"`
@@ -244,11 +231,6 @@ func (m *Module) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	m.ID = mod.ID
-	if m.ID == "" {
-		m.ID = uuid.New().String()
 	}
 
 	return nil

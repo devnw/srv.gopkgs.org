@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -42,7 +41,7 @@ type client struct {
 }
 
 func (c *client) Domains(ctx context.Context, a auth) firestore.Query {
-	return c.Collection("domains").Where("Owner", "==", a.email)
+	return c.Collection("domains").Where("Owner", "==", a.id)
 }
 
 func createClient(ctx context.Context) (*client, error) {
@@ -77,23 +76,15 @@ func main() {
 
 	router.Handle(
 		"/domains",
-		// validateToken(
-		// authInfo(
 		http.HandlerFunc(api.domainsHandler),
-		// ),
-		// ),
 	)
 
 	router.Handle(
 		"/modules",
-		// validateToken(
-		// authInfo(
 		http.HandlerFunc(api.modulesHandler),
-		// ),
-		// ),
 	)
 
-	routerWithCORS := handleCORS(JSON(router)) // Move validate token and auth info to here
+	routerWithCORS := handleCORS(validateToken(authInfo(JSON(router)))) // Move validate token and auth info to here
 
 	server := &http.Server{
 		Addr:    ":6060",
@@ -105,17 +96,14 @@ func main() {
 }
 
 type auth struct {
-	email    string
-	provider string
-	id       string
+	email string
+	id    string
 }
 
 const ainfo = "AUTHINFO"
 
 func authInfo(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		fmt.Printf("[%s]\n", req.Header.Get("Authorization"))
-
 		token, err := extractToken(req)
 		if err != nil {
 			fmt.Printf("failed to parse payload: %s\n", err)
@@ -156,18 +144,9 @@ func authInfo(next http.Handler) http.Handler {
 			return
 		}
 
-		subjs := strings.Split(token.Subject(), "|")
-		if len(subjs) != 2 {
-			fmt.Printf("failed to parse subject\n")
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{"failed to parse subject"})
-			return
-		}
-
 		ctxWithToken := context.WithValue(req.Context(), ainfo, auth{
-			email:    email,
-			provider: subjs[0],
-			id:       subjs[1],
+			email: email,
+			id:    token.Subject(),
 		})
 
 		next.ServeHTTP(rw, req.WithContext(ctxWithToken))
@@ -227,7 +206,13 @@ type mod struct {
 
 func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	owner := "benji@devnw.com"
+	aInfo, ok := ctx.Value(ainfo).(auth)
+	if !ok {
+		fmt.Printf("failed to get auth info\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"failed to get auth info"})
+		return
+	}
 
 	log.Printf("POST %s\n", r.URL.Path)
 
@@ -248,9 +233,7 @@ func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d, err := a.c.Domains(ctx, auth{
-		email: owner,
-	}).Where("ID", "==", m.ID).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, aInfo).Where("ID", "==", m.ID).Limit(1).Documents(ctx).Next()
 
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
@@ -291,7 +274,13 @@ func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
 
 func (a *api) moduleHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	owner := "benji@devnw.com"
+	aInfo, ok := ctx.Value(ainfo).(auth)
+	if !ok {
+		fmt.Printf("failed to get auth info\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"failed to get auth info"})
+		return
+	}
 
 	log.Printf("DELETE %s\n", r.URL.Path)
 
@@ -309,9 +298,7 @@ func (a *api) moduleHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d, err := a.c.Domains(ctx, auth{
-		email: owner,
-	}).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, aInfo).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
 
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
@@ -379,6 +366,13 @@ func Unmarshal[T any](rc io.ReadCloser) (T, error) {
 
 func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	aInfo, ok := ctx.Value(ainfo).(auth)
+	if !ok {
+		fmt.Printf("failed to get auth info\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"failed to get auth info"})
+		return
+	}
 
 	log.Printf("PUT %s\n", r.URL.Path)
 
@@ -428,7 +422,7 @@ func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 
 	host := &gois.Host{
 		ID:     uuid.New().String(),
-		Owner:  "benji@devnw.com",
+		Owner:  aInfo.id,
 		Domain: domain.Domain,
 		Token:  token,
 	}
@@ -454,15 +448,13 @@ func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 
 func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	// aInfo, ok := ctx.Value(ainfo).(auth)
-	// if !ok {
-	// 	fmt.Printf("failed to get auth info\n")
-	// 	rw.WriteHeader(http.StatusUnauthorized)
-	// 	sendMessage(rw, &message{"failed to get auth info"})
-	// 	return
-	// }
-
-	owner := "benji@devnw.com"
+	aInfo, ok := ctx.Value(ainfo).(auth)
+	if !ok {
+		fmt.Printf("failed to get auth info\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"failed to get auth info"})
+		return
+	}
 
 	log.Printf("DELETE %s\n", r.URL.Path)
 	id := r.URL.Query().Get("id")
@@ -481,9 +473,7 @@ func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 	// }
 
 	// var d *firestore.DocumentSnapshot
-	d, err := a.c.Domains(ctx, auth{
-		email: owner,
-	}).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, aInfo).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
 
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
@@ -503,7 +493,13 @@ func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 
 func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	owner := "benji@devnw.com"
+	aInfo, ok := ctx.Value(ainfo).(auth)
+	if !ok {
+		fmt.Printf("failed to get auth info\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"failed to get auth info"})
+		return
+	}
 
 	// aInfo, ok := ctx.Value(ainfo).(auth)
 	// if !ok {
@@ -531,9 +527,7 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 	domains := []*gois.Host{}
 
 	// var d *firestore.DocumentSnapshot
-	iter := a.c.Domains(ctx, auth{
-		email: owner,
-	}).Documents(ctx)
+	iter := a.c.Domains(ctx, aInfo).Documents(ctx)
 
 	for {
 		d, err := iter.Next()

@@ -272,7 +272,6 @@ func domains() gois.Records {
 					Path:   "hammer",
 					Proto:  "git",
 					Repo:   u("https://github.com/benjivesterby/hammer"),
-					Site:   u("https://benjiv.com"),
 					Docs:   u("https://pkg.go.dev/go.benjiv.com/hammer"),
 				},
 			},
