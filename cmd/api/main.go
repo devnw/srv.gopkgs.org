@@ -13,10 +13,13 @@ import (
 )
 
 const (
-	AUDIENCE    = "https://api.gopkgs.org"
-	DOMAIN      = "devnw.us.auth0.com"
+	AUDIENCE = "https://api.gopkgs.org"
+	DOMAIN   = "devnw.us.auth0.com"
+
+	//nolint:lll
 	DOMAINREGEX = `^(?:(?:(?:[a-zA-Z-]+):\/{1,3})?(?:[a-zA-Z0-9])(?:[a-zA-Z0-9\-.]){1,61}(?:\.[a-zA-Z]{2,})+|\[(?:(?:(?:[a-fA-F0-9]){1,4})(?::(?:[a-fA-F0-9]){1,4}){7}|::1|::)\]|(?:(?:[0-9]{1,3})(?:\.[0-9]{1,3}){3}))(?::[0-9]{1,5})?$`
-	GOPKGSKEY   = "gopkgs_domain_token"
+
+	GOPKGSKEY = "gopkgs_domain_token"
 )
 
 type key int

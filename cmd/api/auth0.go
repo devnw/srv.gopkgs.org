@@ -13,10 +13,12 @@ import (
 	"go.devnw.com/alog"
 )
 
+type AUTHKEY string
+
 const (
 	corsAllowedDomain = "http://localhost:8080"
 	authHeader        = "Authorization"
-	ctxTokenKey       = "Auth0Token"
+	ctxTokenKey       = AUTHKEY("Auth0Token")
 	authPrefix        = "Bearer "
 )
 
