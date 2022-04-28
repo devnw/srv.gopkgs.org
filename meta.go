@@ -4,12 +4,12 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"text/template"
 	"time"
 
+	"go.devnw.com/alog"
 	"go.devnw.com/dns"
 )
 
@@ -151,11 +151,11 @@ var fs embed.FS
 var tmpl = template.Must(template.ParseFS(fs, "template.go.html"))
 
 func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Serving Module: %+v\n", m)
+	alog.Printf("Serving Module: %+v\n", m)
 
 	// Redirect the user to the documentation address if available
 	if r.URL.Query().Get("go-get") == "1" {
-		log.Printf("Serving Module: %+v; GO-GET\n", m)
+		alog.Printf("Serving Module: %+v; GO-GET\n", m)
 		tmpl.Execute(w, m)
 	} else {
 		redirectURL := m.Docs
@@ -163,7 +163,7 @@ func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
 			u, _ := url.Parse(GOPKGS)
 			redirectURL = u
 		}
-		log.Printf("Serving Module: %+v; REDIRECT\n", m)
+		alog.Printf("Serving Module: %+v; REDIRECT\n", m)
 
 		if redirectURL == nil {
 			w.WriteHeader(http.StatusNotFound)

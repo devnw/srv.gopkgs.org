@@ -213,8 +213,12 @@ github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
+go.devnw.com/alog v1.1.1 h1:u+85qyAwvcm0t46brAI8/DNW1FhW+XV+2Xk9MCs621I=
+go.devnw.com/alog v1.1.1/go.mod h1:+C3sYPkWZKet8XEvZ7DCcmEa30QQ4BRl67UcGLywOXc=
 go.devnw.com/dns v0.0.0-20220226150616-c677701e0167 h1:UFtAJGlVZFytoOppNMgiFFFK6icu+1304SGknIM7G+c=
 go.devnw.com/dns v0.0.0-20220226150616-c677701e0167/go.mod h1:864iBoCgUbZyY8/cYHDayl+wDXKVCluEafl2hsgfv5g=
+go.devnw.com/validator v1.0.8 h1:IUuu8o7WKZPf5WsiUWvdU7qwBZvWwKezpZQnXn2gX+k=
+go.devnw.com/validator v1.0.8/go.mod h1:5kfqytQCBGTupXx1ZoIfV97qvKtsAi6lt2HfmvjWa6A=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 go.opencensus.io v0.22.0/go.mod h1:+kGneAE2xo2IficOXnaByMWTGM9T73dGwxeWcUqIpI8=
 go.opencensus.io v0.22.2/go.mod h1:yxeiOL68Rb0Xd1ddK5vPZ/oVn4vY4Ynel7k9FzqtOIw=

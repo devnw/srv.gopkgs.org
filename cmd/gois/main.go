@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,6 +17,7 @@ import (
 	"cloud.google.com/go/firestore"
 	secrets "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/davecgh/go-spew/spew"
+	"go.devnw.com/alog"
 	"go.devnw.com/dns"
 	"go.devnw.com/gois"
 	"golang.org/x/crypto/acme"
@@ -45,35 +45,35 @@ func domains() gois.Records {
 
 	pkgs, err := dns.NewToken("mod.gopkgs.org", TOKENKEY, &exp)
 	if err != nil {
-		log.Fatal(err)
+		alog.Fatal(err)
 	}
 
 	fmt.Printf("mod.gopkgs.org: [%s]\n", pkgs.String())
 
 	devnw, err := dns.NewToken("go.devnw.com", TOKENKEY, &exp)
 	if err != nil {
-		log.Fatal(err)
+		alog.Fatal(err)
 	}
 
 	fmt.Printf("go.devnw.com: [%s]\n", devnw.String())
 
 	atom, err := dns.NewToken("go.atomizer.io", TOKENKEY, &exp)
 	if err != nil {
-		log.Fatal(err)
+		alog.Fatal(err)
 	}
 
 	fmt.Printf("go.atomizer.io: [%s]\n", atom.String())
 
 	bv, err := dns.NewToken("go.benjiv.com", TOKENKEY, &exp)
 	if err != nil {
-		log.Fatal(err)
+		alog.Fatal(err)
 	}
 
 	fmt.Printf("go.benjiv.com: [%s]\n", bv.String())
 
 	sd, err := dns.NewToken("go.structs.dev", TOKENKEY, &exp)
 	if err != nil {
-		log.Fatal(err)
+		alog.Fatal(err)
 	}
 
 	fmt.Printf("go.structs.dev: [%s]\n", sd.String())
@@ -361,7 +361,7 @@ func createClient(ctx context.Context) (*firestore.Client, error) {
 func addDomains(ctx context.Context) {
 	c, err := createClient(ctx)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		alog.Fatalf("Failed to create client: %v", err)
 	}
 	defer c.Close()
 
@@ -385,7 +385,7 @@ func serve(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", dm.Handler)
 
-	log.Fatal(http.Serve(dm.Listener(ctx), mux))
+	alog.Fatal(http.Serve(dm.Listener(ctx), mux))
 }
 
 func main() {
@@ -419,14 +419,14 @@ func main() {
 
 	// c, err := createClient(ctx)
 	// if err != nil {
-	// 	log.Fatalf("Failed to create client: %v", err)
+	// 	alog.Fatalf("Failed to create client: %v", err)
 	// }
 	// defer c.Close()
 
 	// d, err := c.Collection("domains").Doc("i.devnw.com").Get(ctx)
 	// if err != nil {
-	// 	log.Fatalf("Failed to get document: %v", err)
-	// 	// log.Printf("Failed to get document: %v", err)
+	// 	alog.Fatalf("Failed to get document: %v", err)
+	// 	// alog.Printf("Failed to get document: %v", err)
 	// 	// // return fmt.Errorf("failed to lookup host: %v", err)
 	// 	// return &acme.Error{
 	// 	// 	StatusCode: http.StatusNotFound,
@@ -436,7 +436,7 @@ func main() {
 	// h := gois.Host{}
 	// err = d.DataTo(&h)
 	// if err != nil {
-	// 	log.Fatalf("Failed to get document: %v", err)
+	// 	alog.Fatalf("Failed to get document: %v", err)
 	// }
 
 	// if h.Token == nil {
@@ -448,7 +448,7 @@ func main() {
 
 	// 	err = h.Token.Verify(ctx, net.DefaultResolver)
 	// 	if err != nil {
-	// 		log.Fatalf("unable to resolve host: %v", err)
+	// 		alog.Fatalf("unable to resolve host: %v", err)
 	// 	}
 
 	// 	t := time.Now()
@@ -460,11 +460,11 @@ func main() {
 
 	// 	_, err = c.Collection("domains").Doc("i.devnw.com").Set(ctx, h)
 	// 	if err != nil {
-	// 		log.Fatalf("failed to update host record: %v", err)
+	// 		alog.Fatalf("failed to update host record: %v", err)
 	// 	}
 
 	// 	if h.Token.Validated == nil {
-	// 		log.Fatalf("Token not validated")
+	// 		alog.Fatalf("Token not validated")
 	// 	}
 	// }
 
@@ -472,13 +472,13 @@ func main() {
 
 	// doc, err := c.Collection("records").Doc("i.atomizer.io").Get(ctx)
 	// if err != nil {
-	// 	log.Fatalf("Failed to retrieve document: %v", err)
+	// 	alog.Fatalf("Failed to retrieve document: %v", err)
 	// }
 
 	// mods := map[string]gois.Module{}
 	// err = doc.DataTo(&mods)
 	// if err != nil {
-	// 	log.Fatalf("Failed to decode document: %v", err)
+	// 	alog.Fatalf("Failed to decode document: %v", err)
 	// }
 
 	// spew.Dump(mods)
@@ -635,7 +635,7 @@ func (dc *DomainManager) HostPolicy(ctx context.Context, domain string) error {
 }
 
 func (dc *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Hello, TLS user! Your config: %+v", r.TLS.ServerName)
+	alog.Printf("Hello, TLS user! Your config: %+v", r.TLS.ServerName)
 
 	// Check cache
 	dc.cacheMu.RLock()
@@ -643,11 +643,11 @@ func (dc *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	dc.cacheMu.RUnlock()
 
 	if !ok {
-		log.Printf("No cache for %s; loading from db", r.TLS.ServerName)
+		alog.Printf("No cache for %s; loading from db", r.TLS.ServerName)
 		var err error
 		host, err = dc.VerifyHost(dc.ctx, r.TLS.ServerName)
 		if err != nil {
-			log.Printf("Failed to verify host: %v", err)
+			alog.Printf("Failed to verify host: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -661,20 +661,20 @@ func (dc *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	modPath := strings.TrimPrefix(r.URL.Path, "/")
 	module, ok := host.Modules[modPath]
 	if !ok {
-		log.Printf("No module for %s %s", host.Domain, modPath)
+		alog.Printf("No module for %s %s", host.Domain, modPath)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	// Execute the module handler
-	log.Printf("Executing module %s/%s", host.Domain, modPath)
+	alog.Printf("Executing module %s/%s", host.Domain, modPath)
 	module.Handle(w, r)
 }
 
 func (dc *DomainManager) VerifyHost(ctx context.Context, domain string) (host *gois.Host, err error) {
 	defer func() {
 		if err != nil {
-			log.Printf("[ERROR] %s", err)
+			alog.Printf("[ERROR] %s", err)
 
 			// Override the error to ensure no data leakage to client
 			err = &acme.Error{
@@ -756,7 +756,7 @@ func sha(in string) string {
 // Get returns a certificate data for the specified key.
 // If there's no such key, Get returns ErrCacheMiss.
 func (dc *DomainManager) Get(ctx context.Context, key string) ([]byte, error) {
-	log.Printf("[DEBUG] Get: %s", key)
+	alog.Printf("[DEBUG] Get: %s", key)
 	// 	if !strings.HasPrefix(key, "acme_account")
 
 	// }
@@ -779,7 +779,7 @@ func (dc *DomainManager) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (dc *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.AccessSecretVersionResponse, error) {
-	log.Printf("[DEBUG] getSecret: %s", key)
+	alog.Printf("[DEBUG] getSecret: %s", key)
 
 	// Lookup the latest secret for this key in secrets manager.
 	accessRequest := &secretspb.AccessSecretVersionRequest{
@@ -793,11 +793,11 @@ func (dc *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.
 	// Execute the request
 	result, err := dc.secrets.AccessSecretVersion(ctx, accessRequest)
 	if err != nil {
-		log.Printf("[DEBUG] getSecret: Unable to find %s at %s", key, accessRequest.Name)
+		alog.Printf("[DEBUG] getSecret: Unable to find %s at %s", key, accessRequest.Name)
 		return nil, autocert.ErrCacheMiss
 	}
 
-	log.Printf("[DEBUG] getSecret: FOUND %s", key)
+	alog.Printf("[DEBUG] getSecret: FOUND %s", key)
 	return result, nil
 }
 
@@ -812,10 +812,10 @@ func (dc *DomainManager) Put(ctx context.Context, key string, data []byte) error
 	// Only add to secrets manager if the key doesn't already exist
 	result, err := dc.getSecret(ctx, key)
 	if err == nil {
-		log.Printf("[INFO] key [%s] already exists in secrets manager", key)
+		alog.Printf("[INFO] key [%s] already exists in secrets manager", key)
 		name = result.Name
 	} else {
-		log.Printf("[INFO] Put %s; result %s", key, spew.Sdump(result))
+		alog.Printf("[INFO] Put %s; result %s", key, spew.Sdump(result))
 
 		// push to secret manager
 		// Create the request to create the secret.
@@ -831,11 +831,11 @@ func (dc *DomainManager) Put(ctx context.Context, key string, data []byte) error
 			},
 		}
 
-		log.Printf("[INFO] Put Secret Request%s", spew.Sdump(createSecretReq))
+		alog.Printf("[INFO] Put Secret Request%s", spew.Sdump(createSecretReq))
 
 		secret, err := dc.secrets.CreateSecret(ctx, createSecretReq)
 		if err != nil {
-			log.Fatalf("failed to create secret: %v", err)
+			alog.Fatalf("failed to create secret: %v", err)
 		}
 
 		name = secret.Name
@@ -852,7 +852,7 @@ func (dc *DomainManager) Put(ctx context.Context, key string, data []byte) error
 	// Call the API.
 	_, err = dc.secrets.AddSecretVersion(ctx, addSecretVersionReq)
 	if err != nil {
-		log.Fatalf("failed to add secret version: %v", err)
+		alog.Fatalf("failed to add secret version: %v", err)
 	}
 
 	// Store local cache for quick lookup.

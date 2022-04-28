@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/google/uuid"
+	"go.devnw.com/alog"
 	"go.devnw.com/dns"
 	"go.devnw.com/gois"
 	"google.golang.org/api/iterator"
@@ -84,15 +84,15 @@ func main() {
 		http.HandlerFunc(api.modulesHandler),
 	)
 
-	routerWithCORS := handleCORS(validateToken(authInfo(JSON(router)))) // Move validate token and auth info to here
+	routerWithCORS := JSON(handleCORS(validateToken(authInfo(router)))) // Move validate token and auth info to here
 
 	server := &http.Server{
 		Addr:    ":6060",
 		Handler: routerWithCORS,
 	}
 
-	log.Printf("API server listening on %s", server.Addr)
-	log.Fatal(server.ListenAndServe())
+	alog.Printf("API server listening on %s", server.Addr)
+	alog.Fatal(server.ListenAndServe())
 }
 
 type auth struct {
@@ -104,6 +104,7 @@ const ainfo = "AUTHINFO"
 
 func authInfo(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+
 		token, err := extractToken(req)
 		if err != nil {
 			fmt.Printf("failed to parse payload: %s\n", err)
@@ -167,16 +168,12 @@ type api struct {
 func (a *api) domainsHandler(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		log.Printf("GET %s\n", r.URL.Path)
 		a.domainsHandlerGet(rw, r)
 	case http.MethodPut:
-		log.Printf("PUT %s\n", r.URL.Path)
 		a.domainsHandlerPut(rw, r)
 	case http.MethodPost:
-		log.Printf("POST %s\n", r.URL.Path)
 		a.domainsHandlerPost(rw, r)
 	case http.MethodDelete:
-		log.Printf("DELETE %s\n", r.URL.Path)
 		a.domainsHandlerDelete(rw, r)
 	default:
 		rw.WriteHeader(http.StatusMethodNotAllowed)
@@ -185,14 +182,9 @@ func (a *api) domainsHandler(rw http.ResponseWriter, r *http.Request) {
 
 func (a *api) modulesHandler(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	// case http.MethodGet:
-	// 	log.Printf("GET %s\n", r.URL.Path)
-	// 	a.domainsHandlerGet(rw, r)
 	case http.MethodPost:
-		log.Printf("POST %s\n", r.URL.Path)
 		a.moduleHandlerPost(rw, r)
 	case http.MethodDelete:
-		log.Printf("DELETE %s\n", r.URL.Path)
 		a.moduleHandlerDelete(rw, r)
 	default:
 		rw.WriteHeader(http.StatusMethodNotAllowed)
@@ -214,11 +206,9 @@ func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("POST %s\n", r.URL.Path)
-
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("failed to read body: %s\n", err)
+		alog.Printf("failed to read body: %s\n", err)
 		rw.WriteHeader(http.StatusBadRequest)
 		sendMessage(rw, &message{err.Error()})
 		return
@@ -227,18 +217,39 @@ func (a *api) moduleHandlerPost(rw http.ResponseWriter, r *http.Request) {
 	m := &mod{}
 	err = json.Unmarshal(data, m)
 	if err != nil {
-		log.Printf("failed to unmarshal body: %s\n", err)
+		alog.Printf("failed to unmarshal body: %s\n", err)
 		rw.WriteHeader(http.StatusBadRequest)
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
 
-	d, err := a.c.Domains(ctx, aInfo).Where("ID", "==", m.ID).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, aInfo).
+		Where("ID", "==", m.ID).
+		Limit(1).
+		Documents(ctx).
+		Next()
 
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
 		rw.WriteHeader(http.StatusInternalServerError)
 		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	h := &gois.Host{}
+	err = d.DataTo(h)
+	if err != nil {
+		fmt.Printf("failed to convert data to host: %s\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		sendMessage(rw, &message{err.Error()})
+		return
+	}
+
+	if h.Token.Validated == nil ||
+		!h.Token.Validated.Before(h.Token.ValidateBy) {
+		fmt.Printf("domain not validated\n")
+		rw.WriteHeader(http.StatusUnauthorized)
+		sendMessage(rw, &message{"token not validated"})
 		return
 	}
 
@@ -282,8 +293,6 @@ func (a *api) moduleHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("DELETE %s\n", r.URL.Path)
-
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		rw.WriteHeader(http.StatusBadRequest)
@@ -316,10 +325,12 @@ func (a *api) moduleHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }
 
 func (a *api) domainsHandlerPost(rw http.ResponseWriter, r *http.Request) {
-	log.Printf("POST %s\n", r.URL.Path)
+	alog.Printf("POST %s\n", r.URL.Path)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Printf("failed to read body: %s\n", err)
@@ -374,8 +385,6 @@ func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("PUT %s\n", r.URL.Path)
-
 	domain, err := Unmarshal[newDomain](r.Body)
 	if err != nil {
 		fmt.Printf("failed to unmarshal body: %s\n", err)
@@ -391,14 +400,6 @@ func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
-
-	// client, err := createClient(ctx)
-	// if err != nil {
-	// 	fmt.Printf("failed to create client: %s\n", err)
-	// 	rw.WriteHeader(http.StatusInternalServerError)
-	// 	sendMessage(rw, &message{err.Error()})
-	// 	return
-	// }
 
 	// TODO: set this up so that if a domain exists but is not validated it
 	// can be migrated to a new user and be validated.
@@ -443,7 +444,8 @@ func (a *api) domainsHandlerPut(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Write(data)
+	// TODO: check err?
+	_, _ = rw.Write(data)
 }
 
 func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
@@ -456,7 +458,7 @@ func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("DELETE %s\n", r.URL.Path)
+	alog.Printf("DELETE %s\n", r.URL.Path)
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		rw.WriteHeader(http.StatusBadRequest)
@@ -464,16 +466,11 @@ func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// client, err := createClient(ctx)
-	// if err != nil {
-	// 	fmt.Printf("failed to create client: %s\n", err)
-	// 	rw.WriteHeader(http.StatusInternalServerError)
-	// 	sendMessage(rw, &message{err.Error()})
-	// 	return
-	// }
-
-	// var d *firestore.DocumentSnapshot
-	d, err := a.c.Domains(ctx, aInfo).Where("ID", "==", id).Limit(1).Documents(ctx).Next()
+	d, err := a.c.Domains(ctx, aInfo).
+		Where("ID", "==", id).
+		Limit(1).
+		Documents(ctx).
+		Next()
 
 	if err != nil {
 		fmt.Printf("failed to get domain: %s\n", err)
@@ -489,6 +486,8 @@ func (a *api) domainsHandlerDelete(rw http.ResponseWriter, r *http.Request) {
 		sendMessage(rw, &message{err.Error()})
 		return
 	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }
 
 func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
@@ -501,39 +500,14 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// aInfo, ok := ctx.Value(ainfo).(auth)
-	// if !ok {
-	// 	fmt.Printf("failed to get auth info\n")
-	// 	rw.WriteHeader(http.StatusUnauthorized)
-	// 	sendMessage(rw, &message{"failed to get auth info"})
-	// 	return
-	// }
-
-	// fmt.Printf(
-	// 	"email: %s; auth provider: %s; auth ID: %s\n",
-	// 	aInfo.email,
-	// 	aInfo.provider,
-	// 	aInfo.id,
-	// )
-
-	// client, err := createClient(ctx)
-	// if err != nil {
-	// 	fmt.Printf("failed to create client: %s\n", err)
-	// 	rw.WriteHeader(http.StatusInternalServerError)
-	// 	sendMessage(rw, &message{err.Error()})
-	// 	return
-	// }
-
 	domains := []*gois.Host{}
-
-	// var d *firestore.DocumentSnapshot
 	iter := a.c.Domains(ctx, aInfo).Documents(ctx)
-
 	for {
 		d, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
+
 		if err != nil {
 			fmt.Printf("failed to get domain: %s\n", err)
 			rw.WriteHeader(http.StatusInternalServerError)
@@ -547,7 +521,7 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 			fmt.Printf("failed to unmarshal host: %s\n", err)
 			rw.WriteHeader(http.StatusInternalServerError)
 			sendMessage(rw, &message{err.Error()})
-			return
+			continue
 		}
 
 		domains = append(domains, h)
@@ -561,5 +535,6 @@ func (a *api) domainsHandlerGet(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Write(data)
+	// TODO: check err?
+	_, _ = rw.Write(data)
 }
