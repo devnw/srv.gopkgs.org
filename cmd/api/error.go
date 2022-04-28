@@ -5,9 +5,9 @@ import (
 	"net/http"
 )
 
-func newErr(r *http.Request, err error, status int, msg string) error {
+func Err(r *http.Request, err error, status int, msg string) error {
 	return &Error{
-		Endpoint: "module",
+		Endpoint: r.URL.Path,
 		Method:   r.Method,
 		Code:     status,
 		Inner:    err,

@@ -47,19 +47,19 @@ func (m *module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		return newErr(r, err, http.StatusBadRequest, "failed to read body")
+		return Err(r, err, http.StatusBadRequest, "failed to read body")
 	}
 
 	mdata := &moduleData{}
 	err = json.Unmarshal(data, m)
 	if err != nil {
-		return newErr(r, err, http.StatusBadRequest, "failed to unmarshal body")
+		return Err(r, err, http.StatusBadRequest, "failed to unmarshal body")
 	}
 
 	ctx := r.Context()
 	aInfo, ok := ctx.Value(authNCtxKey).(auth)
 	if !ok {
-		return newErr(r, err, http.StatusUnauthorized, "failed to get auth info")
+		return Err(r, err, http.StatusUnauthorized, "failed to get auth info")
 	}
 
 	d, err := m.c.Domains(ctx, aInfo).
@@ -69,7 +69,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 		Next()
 
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,
@@ -80,7 +80,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 	h := &gois.Host{}
 	err = d.DataTo(h)
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,
@@ -93,7 +93,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 
 	if h.Token.Validated == nil ||
 		!h.Token.Validated.Before(h.Token.ValidateBy) {
-		return newErr(
+		return Err(
 			r,
 			nil,
 			http.StatusUnauthorized,
@@ -113,7 +113,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 
 	_, err = d.Ref.Update(ctx, updates)
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,
@@ -123,7 +123,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 
 	data, err = json.Marshal(mdata.Modules)
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,
@@ -133,7 +133,7 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 
 	_, err = w.Write(data)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to write response")
+		return Err(r, err, http.StatusInternalServerError, "failed to write response")
 	}
 
 	return nil
@@ -142,18 +142,18 @@ func (m *module) Post(w http.ResponseWriter, r *http.Request) error {
 func (m *module) Delete(w http.ResponseWriter, r *http.Request) error {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		return newErr(r, nil, http.StatusBadRequest, "missing id")
+		return Err(r, nil, http.StatusBadRequest, "missing id")
 	}
 
 	mod := r.URL.Query().Get("mod")
 	if mod == "" {
-		return newErr(r, nil, http.StatusBadRequest, "missing mod")
+		return Err(r, nil, http.StatusBadRequest, "missing mod")
 	}
 
 	ctx := r.Context()
 	aInfo, ok := ctx.Value(authNCtxKey).(auth)
 	if !ok {
-		return newErr(r, nil, http.StatusUnauthorized, "failed to get auth info")
+		return Err(r, nil, http.StatusUnauthorized, "failed to get auth info")
 	}
 
 	d, err := m.c.Domains(ctx, aInfo).
@@ -163,7 +163,7 @@ func (m *module) Delete(w http.ResponseWriter, r *http.Request) error {
 		Next()
 
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,
@@ -175,7 +175,7 @@ func (m *module) Delete(w http.ResponseWriter, r *http.Request) error {
 		{Path: fmt.Sprintf("Modules.%s", mod), Value: firestore.Delete},
 	})
 	if err != nil {
-		return newErr(
+		return Err(
 			r,
 			err,
 			http.StatusInternalServerError,

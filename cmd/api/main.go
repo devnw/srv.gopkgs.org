@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 
@@ -56,7 +57,32 @@ func createClient(ctx context.Context) (*client, error) {
 
 func main() {
 	fetchTenantKeys()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := alog.Global(
+		ctx,
+		"api.gopkgs.org",
+		alog.DEFAULTTIMEFORMAT,
+		time.UTC,
+		0,
+		[]alog.Destination{
+			{
+				Types:  alog.INFO | alog.DEBUG,
+				Format: alog.JSON,
+				Writer: os.Stdout,
+			},
+			{
+				Types:  alog.ERROR | alog.CRIT | alog.FATAL,
+				Format: alog.JSON,
+				Writer: os.Stderr,
+			},
+		}...,
+	)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	client, err := createClient(ctx)
 	if err != nil {

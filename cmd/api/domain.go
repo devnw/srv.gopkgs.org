@@ -61,18 +61,18 @@ func (d *domain) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (d *domain) Put(w http.ResponseWriter, r *http.Request) error {
 	domain, err := Unmarshal[newDomain](r.Body)
 	if err != nil {
-		return newErr(r, err, http.StatusBadRequest, "failed to unmarshal domain")
+		return Err(r, err, http.StatusBadRequest, "failed to unmarshal domain")
 	}
 
 	ctx := r.Context()
 	aInfo, ok := ctx.Value(authNCtxKey).(auth)
 	if !ok {
-		return newErr(r, err, http.StatusUnauthorized, "failed to get auth info")
+		return Err(r, err, http.StatusUnauthorized, "failed to get auth info")
 	}
 
 	err = domain.validate()
 	if err != nil {
-		return newErr(r, err, http.StatusBadRequest, "failed to validate domain")
+		return Err(r, err, http.StatusBadRequest, "failed to validate domain")
 	}
 
 	// TODO: set this up so that if a domain exists but is not validated it
@@ -80,13 +80,13 @@ func (d *domain) Put(w http.ResponseWriter, r *http.Request) error {
 	// This should happen after the current token is expired or invalidated.
 	_, err = d.c.Collection("domains").Doc(domain.Domain).Get(ctx)
 	if err == nil {
-		return newErr(r, err, http.StatusBadRequest, "domain already exists")
+		return Err(r, err, http.StatusBadRequest, "domain already exists")
 	}
 
 	// Generate domain challenge token
 	token, err := dns.NewToken(domain.Domain, GOPKGSKEY, &timeout)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to generate token")
+		return Err(r, err, http.StatusInternalServerError, "failed to generate token")
 	}
 
 	host := &gois.Host{
@@ -98,12 +98,12 @@ func (d *domain) Put(w http.ResponseWriter, r *http.Request) error {
 
 	_, err = d.c.Collection("domains").Doc(domain.Domain).Create(ctx, host)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to create domain")
+		return Err(r, err, http.StatusInternalServerError, "failed to create domain")
 	}
 
 	data, err := json.Marshal(host)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to marshal host")
+		return Err(r, err, http.StatusInternalServerError, "failed to marshal host")
 	}
 
 	// TODO: check err?
@@ -115,7 +115,7 @@ func (d *domain) Get(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	aInfo, ok := ctx.Value(authNCtxKey).(auth)
 	if !ok {
-		return newErr(r, nil, http.StatusUnauthorized, "failed to get auth info")
+		return Err(r, nil, http.StatusUnauthorized, "failed to get auth info")
 	}
 
 	domains := []*gois.Host{}
@@ -127,14 +127,14 @@ func (d *domain) Get(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		if err != nil {
-			return newErr(r, err, http.StatusInternalServerError, "failed to iterate get domains")
+			return Err(r, err, http.StatusInternalServerError, "failed to iterate get domains")
 		}
 
 		h := &gois.Host{}
 		err = doc.DataTo(h)
 		if err != nil {
 			d.p.ErrorFunc(r.Context(), func() error {
-				return newErr(r, err, http.StatusInternalServerError, "failed to unmarshal domain")
+				return Err(r, err, http.StatusInternalServerError, "failed to unmarshal domain")
 			})
 
 			continue
@@ -145,7 +145,7 @@ func (d *domain) Get(w http.ResponseWriter, r *http.Request) error {
 
 	data, err := json.Marshal(domains)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to marshal domains")
+		return Err(r, err, http.StatusInternalServerError, "failed to marshal domains")
 	}
 
 	// TODO: check err?
@@ -156,13 +156,13 @@ func (d *domain) Get(w http.ResponseWriter, r *http.Request) error {
 func (d *domain) Delete(w http.ResponseWriter, r *http.Request) error {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		return newErr(r, nil, http.StatusBadRequest, "missing id")
+		return Err(r, nil, http.StatusBadRequest, "missing id")
 	}
 
 	ctx := r.Context()
 	aInfo, ok := ctx.Value(authNCtxKey).(auth)
 	if !ok {
-		return newErr(r, nil, http.StatusUnauthorized, "failed to get auth info")
+		return Err(r, nil, http.StatusUnauthorized, "failed to get auth info")
 	}
 
 	domain, err := d.c.Domains(ctx, aInfo).
@@ -172,12 +172,12 @@ func (d *domain) Delete(w http.ResponseWriter, r *http.Request) error {
 		Next()
 
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to get domain")
+		return Err(r, err, http.StatusInternalServerError, "failed to get domain")
 	}
 
 	_, err = domain.Ref.Delete(ctx)
 	if err != nil {
-		return newErr(r, err, http.StatusInternalServerError, "failed to delete domain")
+		return Err(r, err, http.StatusInternalServerError, "failed to delete domain")
 	}
 
 	w.WriteHeader(http.StatusNoContent)
