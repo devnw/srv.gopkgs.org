@@ -38,6 +38,15 @@ const (
 	Bazaar Protocol = "bzr"
 )
 
+func (p Protocol) Valid() bool {
+	switch p {
+	case Git, Subversion, Mercurial, Fossil, Bazaar, Mod:
+		return true
+	}
+
+	return false
+}
+
 type Records []*Host
 
 type Host struct {
@@ -156,7 +165,12 @@ func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
 	// Redirect the user to the documentation address if available
 	if r.URL.Query().Get("go-get") == "1" {
 		alog.Printf("Serving Module: %+v; GO-GET\n", m)
-		tmpl.Execute(w, m)
+		err := tmpl.Execute(w, m)
+		if err != nil {
+			alog.Printf("Error serving module: %+v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	} else {
 		redirectURL := m.Docs
 		if redirectURL == nil {
@@ -217,8 +231,13 @@ func (m *Module) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	m.Path = mod.Path
+	m.Path = url.PathEscape(mod.Path)
+
 	m.Proto = Protocol(mod.Proto)
+	if !m.Proto.Valid() {
+		return fmt.Errorf("invalid protocol: %s", mod.Proto)
+	}
+
 	m.Repo, err = url.Parse(mod.Repo)
 	if err != nil {
 		return err

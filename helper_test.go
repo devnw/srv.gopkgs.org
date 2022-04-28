@@ -14,7 +14,7 @@ import (
 func PkgRequests(paths ...string) []*http.Request {
 	reqs := make([]*http.Request, len(paths))
 	for i, p := range paths {
-		r, _ := http.NewRequest("GET", p, http.NewRequest("GET", p, http.NoBody))
+		r, _ := http.NewRequest("GET", p, http.NoBody)
 		reqs[i] = r
 	}
 	return reqs
@@ -44,7 +44,6 @@ type Listener struct {
 func (l *Listener) Accept() (net.Conn, error) {
 	fmt.Println("Accept")
 	if l.index >= len(l.Conns) {
-		// time.Sleep(time.Minute * 5)
 		return nil, errors.New("listener closed")
 	}
 	c := l.Conns[l.index]

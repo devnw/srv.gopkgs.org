@@ -118,3 +118,59 @@ func fetchTenantKeys() {
 	}
 	tenantKeys = set
 }
+
+type auth struct {
+	email string
+	id    string
+}
+
+func authInfo(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		token, err := extractToken(req)
+		if err != nil {
+			fmt.Printf("failed to parse payload: %s\n", err)
+			rw.WriteHeader(http.StatusUnauthorized)
+			sendMessage(rw, &message{err.Error()})
+			return
+		}
+
+		e, ok := token.PrivateClaims()["https://gopkgs.org/email"]
+		if !ok {
+			fmt.Printf("failed to find email claim\n")
+			rw.WriteHeader(http.StatusUnauthorized)
+			sendMessage(rw, &message{"failed to find email claim"})
+			return
+		}
+
+		ev, ok := token.PrivateClaims()["https://gopkgs.org/email_verified"]
+		if !ok {
+			fmt.Printf("failed to find email claim\n")
+			rw.WriteHeader(http.StatusUnauthorized)
+			sendMessage(rw, &message{"failed to find email claim"})
+			return
+		}
+
+		verified, ok := ev.(bool)
+		if !ok || !verified {
+			fmt.Printf("email not verified\n")
+			rw.WriteHeader(http.StatusUnauthorized)
+			sendMessage(rw, &message{"email not verified"})
+			return
+		}
+
+		email, ok := e.(string)
+		if !ok {
+			fmt.Printf("failed to convert email claim\n")
+			rw.WriteHeader(http.StatusUnauthorized)
+			sendMessage(rw, &message{"failed to convert email claim"})
+			return
+		}
+
+		ctxWithToken := context.WithValue(req.Context(), authNCtxKey, auth{
+			email: email,
+			id:    token.Subject(),
+		})
+
+		next.ServeHTTP(rw, req.WithContext(ctxWithToken))
+	})
+}

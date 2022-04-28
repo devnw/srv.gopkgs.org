@@ -358,22 +358,22 @@ func createClient(ctx context.Context) (*firestore.Client, error) {
 	return client, nil
 }
 
-func addDomains(ctx context.Context) {
-	c, err := createClient(ctx)
-	if err != nil {
-		alog.Fatalf("Failed to create client: %v", err)
-	}
-	defer c.Close()
+// func addDomains(ctx context.Context) {
+// 	c, err := createClient(ctx)
+// 	if err != nil {
+// 		alog.Fatalf(err, "Failed to create client")
+// 	}
+// 	defer c.Close()
 
-	col := c.Collection("domains")
-	d := domains()
+// 	col := c.Collection("domains")
+// 	d := domains()
 
-	for _, h := range d {
-		col.Doc(h.Domain).Set(ctx, h)
-	}
+// 	for _, h := range d {
+// 		col.Doc(h.Domain).Set(ctx, h)
+// 	}
 
-	return
-}
+// 	return
+// }
 
 func serve(ctx context.Context) {
 	dm, err := New(ctx, "gopkgs-342114")
@@ -833,9 +833,10 @@ func (dc *DomainManager) Put(ctx context.Context, key string, data []byte) error
 
 		alog.Printf("[INFO] Put Secret Request%s", spew.Sdump(createSecretReq))
 
-		secret, err := dc.secrets.CreateSecret(ctx, createSecretReq)
+		var secret *secretspb.Secret
+		secret, err = dc.secrets.CreateSecret(ctx, createSecretReq)
 		if err != nil {
-			alog.Fatalf("failed to create secret: %v", err)
+			alog.Fatalf(err, "failed to create secret")
 		}
 
 		name = secret.Name
@@ -852,7 +853,7 @@ func (dc *DomainManager) Put(ctx context.Context, key string, data []byte) error
 	// Call the API.
 	_, err = dc.secrets.AddSecretVersion(ctx, addSecretVersionReq)
 	if err != nil {
-		alog.Fatalf("failed to add secret version: %v", err)
+		alog.Fatalf(err, "failed to add secret version")
 	}
 
 	// Store local cache for quick lookup.
