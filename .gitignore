@@ -1,3 +1,6 @@
+api
+gois
+
 # Removing Vendor
 vendor/
 
@@ -24,3 +27,5 @@ coverage.html
 
 # ignore mac files
 .DS_Store
+
+dist/
