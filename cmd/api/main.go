@@ -11,6 +11,8 @@ import (
 	"cloud.google.com/go/firestore"
 	"go.devnw.com/alog"
 	"go.devnw.com/event"
+	"go.devnw.com/gois"
+	"google.golang.org/api/iterator"
 )
 
 const (
@@ -38,8 +40,148 @@ type client struct {
 	*firestore.Client
 }
 
-func (c *client) Domains(ctx context.Context, a auth) firestore.Query {
-	return c.Collection("domains").Where("Owner", "==", a.id)
+func (c *client) GetDomain(
+	ctx context.Context,
+	userID string,
+	domainID string) (*gois.Host, error) {
+	domain, err := c.DomainByID(ctx, userID, domainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	var h *gois.Host
+	err = domain.DataTo(h)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	return h, nil
+}
+
+func (c *client) GetDomains(ctx context.Context, userID string) ([]*gois.Host, error) {
+	domains := []*gois.Host{}
+	iter := c.Domains(ctx, userID).Documents(ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to get domains: %s", err)
+		}
+
+		h := &gois.Host{}
+		err = doc.DataTo(h)
+		if err != nil {
+			// TODO: use publisher for client?
+			// d.p.ErrorFunc(r.Context(), func() error {
+			// 	return Err(r, err, "failed to unmarshal domain")
+			// })
+
+			continue
+		}
+
+		domains = append(domains, h)
+	}
+
+	return domains, nil
+}
+
+func (c *client) DeleteDomain(
+	ctx context.Context,
+	userID string,
+	domainID string,
+) error {
+	domain, err := c.DomainByID(ctx, userID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	_, err = domain.Ref.Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete domain: %s", err)
+	}
+
+	return nil
+}
+
+func (c *client) UpdateModules(
+	ctx context.Context,
+	userID string,
+	domainID string,
+	modules ...*gois.Module,
+) error {
+	domain, err := c.DomainByID(ctx, userID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	var h *gois.Host
+	err = domain.DataTo(h)
+	if err != nil {
+		return fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	if h.Token.Validated == nil ||
+		!h.Token.Validated.Before(h.Token.ValidateBy) {
+		return fmt.Errorf("token not validated")
+	}
+
+	updates := []firestore.Update{}
+	for _, mod := range modules {
+		updates = append(
+			updates,
+			firestore.Update{
+				Path:  fmt.Sprintf("Modules.%s", mod.Path),
+				Value: mod,
+			},
+		)
+	}
+
+	_, err = domain.Ref.Update(ctx, updates)
+	if err != nil {
+		return fmt.Errorf("failed to update modules: %s", err)
+	}
+
+	return nil
+}
+
+func (c *client) DeleteModule(
+	ctx context.Context,
+	userID string,
+	domainID string,
+	path string,
+) error {
+	domain, err := c.DomainByID(ctx, userID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	_, err = domain.Ref.Update(ctx, []firestore.Update{
+		{Path: fmt.Sprintf("Modules.%s", path), Value: firestore.Delete},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete module: %s", err)
+	}
+
+	return nil
+}
+
+func (c *client) DomainByID(
+	ctx context.Context,
+	userID,
+	domainID string,
+) (*firestore.DocumentSnapshot, error) {
+	return c.Collection("domains").Where("Owner", "==", userID).
+		Where("ID", "==", domainID).
+		Limit(1).
+		Documents(ctx).
+		Next()
+}
+
+func (c *client) Domains(ctx context.Context, userID string) firestore.Query {
+	return c.Collection("domains").Where("Owner", "==", userID)
 }
 
 func createClient(ctx context.Context) (*client, error) {

@@ -89,63 +89,6 @@ func (h Host) MarshalJSON() ([]byte, error) {
 	return data, nil
 }
 
-// func (r Records) Handle(w http.ResponseWriter, req *http.Request) {
-// 	h := strings.Split(req.Host, ":")
-// 	if len(h) == 0 {
-// 		panic("no host")
-// 	}
-
-// 	host := h[0]
-// 	_, ok := r[host]
-// 	if !ok {
-// 		w.WriteHeader(http.StatusNotFound)
-// 	}
-
-// 	fmt.Printf("Serving Host: %+v\n", host)
-
-// 	module, ok := r[host][strings.TrimPrefix(req.URL.Path, "/")]
-// 	if !ok {
-// 		w.WriteHeader(http.StatusNotFound)
-// 		return
-// 	}
-
-// 	// Ensure the host is updated
-// 	module.Host = host
-// 	module.Handle(w, req)
-// }
-
-// func (r Records) UnmarshalJSON(data []byte) error {
-// 	var hosts []Host
-
-// 	err := json.Unmarshal(data, &hosts)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for _, h := range hosts {
-// 		r[h.Domain] = h
-// 	}
-
-// 	return nil
-// }
-
-// type Host struct {
-// 	Domain  string
-// 	Modules map[string]Module
-// }
-
-// func (h Host) Handle(w http.ResponseWriter, r *http.Request) {
-// 	module, ok := h.Modules[strings.TrimPrefix(r.URL.Path, "/")]
-// 	if !ok {
-// 		w.WriteHeader(http.StatusNotFound)
-// 		return
-// 	}
-
-// 	fmt.Printf("Serving Module: %+v\n", module)
-
-// 	module.Handle(w, r)
-// }
-
 type Module struct {
 	Domain string `firestore:"-"`
 	Path   string

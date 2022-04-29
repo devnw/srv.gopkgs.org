@@ -5,11 +5,10 @@ import (
 	"net/http"
 )
 
-func Err(r *http.Request, err error, status int, msg string) error {
+func Err(r *http.Request, err error, msg string) error {
 	return &Error{
 		Endpoint: r.URL.Path,
 		Method:   r.Method,
-		Code:     status,
 		Inner:    err,
 		Message:  msg,
 	}
@@ -20,7 +19,6 @@ type Error struct {
 	Method   string `json:"method"`
 	Message  string `json:"message"`
 	Inner    error  `json:"inner"`
-	Code     int    `json:"-"`
 }
 
 func (e *Error) String() string {
@@ -34,4 +32,21 @@ func (e *Error) String() string {
 
 func (e *Error) Error() string {
 	return e.String()
+}
+
+type wrapped interface {
+	Unwrap() error
+}
+
+func (e *Error) Unwrap() error {
+	if e.Inner == nil {
+		return nil
+	}
+
+	w, ok := e.Inner.(wrapped)
+	if !ok {
+		return e.Inner
+	}
+
+	return w.Unwrap()
 }

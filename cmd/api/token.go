@@ -11,6 +11,7 @@ type token struct {
 	p *event.Publisher
 }
 
+//nolint:dupl
 func (t *token) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {
@@ -24,20 +25,25 @@ func (t *token) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	a, ok := r.Context().Value(authNCtxKey).(auth)
+	if !ok {
+		err = Err(r, err, "failed to get auth info")
+	}
+
 	switch r.Method {
 	case http.MethodPost:
-		err = t.Post(w, r)
+		err = t.Post(a, w, r)
 	case http.MethodDelete:
-		err = t.Delete(w, r)
+		err = t.Delete(a, w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (t *token) Post(w http.ResponseWriter, r *http.Request) error {
+func (t *token) Post(a auth, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (t *token) Delete(w http.ResponseWriter, r *http.Request) error {
+func (t *token) Delete(a auth, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
