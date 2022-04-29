@@ -53,15 +53,17 @@ type Host struct {
 	ID      string
 	Domain  string
 	Owner   string
+	Created time.Time
 	Token   *dns.Token
 	Modules map[string]*Module
 }
 
-func (h Host) MarshalJSON() ([]byte, error) {
+func (h *Host) MarshalJSON() ([]byte, error) {
 	out := struct {
 		ID         string    `json:"id"`
 		Domain     string    `json:"domain"`
 		Owner      string    `json:"owner"`
+		Created    time.Time `json:"created"`
 		Token      string    `json:"token"`
 		Validated  bool      `json:"validated"`
 		ValidateBy time.Time `json:"validate_by"`
@@ -70,6 +72,7 @@ func (h Host) MarshalJSON() ([]byte, error) {
 		ID:         h.ID,
 		Domain:     h.Domain,
 		Owner:      h.Owner,
+		Created:    h.Created,
 		Token:      h.Token.String(),
 		Validated:  h.Token.Validated != nil,
 		ValidateBy: h.Token.ValidateBy,

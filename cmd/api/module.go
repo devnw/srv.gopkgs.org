@@ -17,7 +17,7 @@ type moduleData struct {
 }
 
 type module struct {
-	c *client
+	c DB
 	p *event.Publisher
 }
 

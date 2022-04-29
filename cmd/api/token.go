@@ -7,7 +7,7 @@ import (
 )
 
 type token struct {
-	c *client
+	c DB
 	p *event.Publisher
 }
 

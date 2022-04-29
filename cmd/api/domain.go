@@ -6,9 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"go.devnw.com/dns"
 	"go.devnw.com/event"
-	"go.devnw.com/gois"
 )
 
 type newDomain struct {
@@ -28,7 +26,7 @@ func (d *newDomain) validate() error {
 }
 
 type domain struct {
-	c *client
+	c DB
 	p *event.Publisher
 }
 
@@ -73,28 +71,7 @@ func (d *domain) Put(a auth, w http.ResponseWriter, r *http.Request) error {
 		return Err(r, err, "failed to validate domain")
 	}
 
-	// TODO: set this up so that if a domain exists but is not validated it
-	// can be migrated to a new user and be validated.
-	// This should happen after the current token is expired or invalidated.
-	_, err = d.c.Collection("domains").Doc(domain.Domain).Get(r.Context())
-	if err == nil {
-		return Err(r, err, "domain already exists")
-	}
-
-	// Generate domain challenge token
-	token, err := dns.NewToken(domain.Domain, GOPKGSKEY, &timeout)
-	if err != nil {
-		return Err(r, err, "failed to generate token")
-	}
-
-	host := &gois.Host{
-		ID:     uuid.New().String(),
-		Owner:  a.id,
-		Domain: domain.Domain,
-		Token:  token,
-	}
-
-	_, err = d.c.Collection("domains").Doc(domain.Domain).Create(r.Context(), host)
+	host, err := d.c.CreateDomain(r.Context(), a.id, domain.Domain)
 	if err != nil {
 		return Err(r, err, "failed to create domain")
 	}
