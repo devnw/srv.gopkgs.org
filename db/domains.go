@@ -12,16 +12,19 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+const DAY = time.Hour * 24
+
 func (c *Client) GetDomain(
 	ctx context.Context,
 	userID string,
-	domainID string) (*gois.Host, error) {
+	domainID string,
+) (*gois.Host, error) {
 	domain, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain: %s", err)
 	}
 
-	var h *gois.Host
+	h := &gois.Host{}
 	err = domain.DataTo(h)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain: %s", err)
@@ -123,10 +126,14 @@ func (c *Client) NewDomainToken(
 		return nil, fmt.Errorf("failed to get domain: %s", err)
 	}
 
-	var domain *gois.Host
+	domain := &gois.Host{}
 	err = domainRef.DataTo(domain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	if !domain.Created.Add(DAY).Before(time.Now()) {
+		return nil, fmt.Errorf("only one new token can be created in 24 hours")
 	}
 
 	// The domain is already validated so just return the existing token
@@ -169,12 +176,12 @@ func (c *Client) UpdateDomainToken(
 
 	_, err = domain.Ref.Update(ctx, []firestore.Update{
 		{
-			Path:  "Token.Validated",
-			Value: validated,
-		},
-		{
 			Path:  "Token.Updated",
 			Value: time.Now(),
+		},
+		{
+			Path:  "Token.Validated",
+			Value: validated,
 		},
 	})
 	if err != nil {

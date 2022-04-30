@@ -170,13 +170,11 @@ func main() {
 		&module{client, p},
 	)
 
-	// TODO: Add validation check and new token request
 	router.Handle(
 		"/token",
 		&token{client, p},
 	)
 
-	// TODO: Add validation check and new token request
 	router.Handle(
 		"/verify",
 		&verify{client, p, Resolver},
