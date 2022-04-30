@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
 )
 
@@ -25,25 +26,26 @@ func (t *token) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	a, ok := r.Context().Value(authNCtxKey).(auth)
-	if !ok {
-		err = Err(r, err, "failed to get auth info")
+	var jtok jwt.Token
+	jtok, err = Token(r.Context())
+	if err != nil {
+		return
 	}
 
 	switch r.Method {
 	case http.MethodPost:
-		err = t.Post(a, w, r)
+		err = t.Post(jtok, w, r)
 	case http.MethodDelete:
-		err = t.Delete(a, w, r)
+		err = t.Delete(jtok, w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (t *token) Post(a auth, w http.ResponseWriter, r *http.Request) error {
+func (t *token) Post(jtok jwt.Token, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (t *token) Delete(a auth, w http.ResponseWriter, r *http.Request) error {
+func (t *token) Delete(jtok jwt.Token, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }

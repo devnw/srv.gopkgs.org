@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
 )
 
@@ -43,24 +44,25 @@ func (d *domain) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	a, ok := r.Context().Value(authNCtxKey).(auth)
-	if !ok {
-		err = Err(r, err, "failed to get auth info")
+	var t jwt.Token
+	t, err = Token(r.Context())
+	if err != nil {
+		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		err = d.Get(a, w, r)
+		err = d.Get(t, w, r)
 	case http.MethodPut:
-		err = d.Put(a, w, r)
+		err = d.Put(t, w, r)
 	case http.MethodDelete:
-		err = d.Delete(a, w, r)
+		err = d.Delete(t, w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (d *domain) Put(a auth, w http.ResponseWriter, r *http.Request) error {
+func (d *domain) Put(t jwt.Token, w http.ResponseWriter, r *http.Request) error {
 	domain, err := Unmarshal[newDomain](r.Body)
 	if err != nil {
 		return Err(r, err, "failed to unmarshal domain")
@@ -71,7 +73,7 @@ func (d *domain) Put(a auth, w http.ResponseWriter, r *http.Request) error {
 		return Err(r, err, "failed to validate domain")
 	}
 
-	host, err := d.c.CreateDomain(r.Context(), a.id, domain.Domain)
+	host, err := d.c.CreateDomain(r.Context(), t.Subject(), domain.Domain)
 	if err != nil {
 		return Err(r, err, "failed to create domain")
 	}
@@ -89,8 +91,8 @@ func (d *domain) Put(a auth, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (d *domain) Get(a auth, w http.ResponseWriter, r *http.Request) error {
-	domains, err := d.c.GetDomains(r.Context(), a.id)
+func (d *domain) Get(t jwt.Token, w http.ResponseWriter, r *http.Request) error {
+	domains, err := d.c.GetDomains(r.Context(), t.Subject())
 	if err != nil {
 		return Err(r, err, "failed to get domains")
 	}
@@ -108,13 +110,13 @@ func (d *domain) Get(a auth, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (d *domain) Delete(a auth, w http.ResponseWriter, r *http.Request) error {
+func (d *domain) Delete(t jwt.Token, w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(r.URL.Query().Get("id"))
 	if err != nil {
 		return Err(r, err, "invalid id")
 	}
 
-	err = d.c.DeleteDomain(r.Context(), a.id, id.String())
+	err = d.c.DeleteDomain(r.Context(), t.Subject(), id.String())
 	if err != nil {
 		return Err(r, err, "failed to delete domain")
 	}

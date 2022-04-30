@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"time"
@@ -29,14 +30,9 @@ const (
 	TOKENTIMEOUT = time.Hour * 24 * 7
 )
 
-type key int
-
-const (
-	authNCtxKey key = iota
-)
-
 // Compile the regex immediately.
 var DomainReggy = regexp.MustCompile(DOMAINREGEX)
+var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", DOMAIN)
 
 type DB interface {
 	GetDomains(ctx context.Context, userID string) ([]*gois.Host, error)
@@ -74,9 +70,10 @@ type DB interface {
 }
 
 func main() {
-	fetchTenantKeys()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	p := event.NewPublisher(ctx)
 
 	err := alog.Global(
 		ctx,
@@ -102,16 +99,41 @@ func main() {
 		return
 	}
 
+	// Subscribe logger to events and errors from default publisher
+	alog.Printc(ctx, p.ReadEvents(0).Interface())
+	alog.Errorc(ctx, p.ReadErrors(0).Interface())
+
+	jwks, err := url.Parse(JWKs)
+	if err != nil {
+		alog.Fatalf(err, "failed to parse jwks url")
+		return
+	}
+
+	auth, err := Authenticator(ctx, jwks)
+	if err != nil {
+		alog.Fatalf(err, "failed to create authenticator")
+		return
+	}
+
+	// Subscribe parent publisher to Authentication events and errors
+	err = p.Events(ctx, auth.ReadEvents(0))
+	if err != nil {
+		alog.Fatalf(err, "failed to subscribe to authentication events")
+		return
+	}
+
+	err = p.Errors(ctx, auth.ReadErrors(0))
+	if err != nil {
+		alog.Fatalf(err, "failed to subscribe to authentication errors")
+		return
+	}
+
+	// Create the database connection
 	client, err := db.New(ctx, PROJECT, TOKENKEY, TOKENTIMEOUT)
 	if err != nil {
 		fmt.Printf("failed to create database client: %s\n", err)
 		return
 	}
-
-	p := event.NewPublisher(ctx)
-
-	alog.Printc(ctx, p.ReadEvents(0).Interface())
-	alog.Errorc(ctx, p.ReadErrors(0).Interface())
 
 	router := http.NewServeMux()
 	router.Handle("/", http.NotFoundHandler())
@@ -132,11 +154,13 @@ func main() {
 		&token{client, p},
 	)
 
-	routerWithCORS := JSON(handleCORS(validateToken(authInfo(router)))) // Move validate token and auth info to here
-
 	server := &http.Server{
-		Addr:    ":6060",
-		Handler: routerWithCORS,
+		Addr: ":6060",
+		Handler: JSON(
+			auth.ValidateToken(
+				router,
+			),
+		),
 	}
 
 	alog.Printf("API server listening on %s", server.Addr)

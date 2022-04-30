@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
 	"go.devnw.com/gois"
 )
@@ -35,22 +36,27 @@ func (m *module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	a, ok := r.Context().Value(authNCtxKey).(auth)
-	if !ok {
-		err = Err(r, err, "failed to get auth info")
+	var t jwt.Token
+	t, err = Token(r.Context())
+	if err != nil {
+		return
 	}
 
 	switch r.Method {
 	case http.MethodPost:
-		err = m.Post(a, w, r)
+		err = m.Post(t, w, r)
 	case http.MethodDelete:
-		err = m.Delete(a, w, r)
+		err = m.Delete(t, w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (m *module) Post(a auth, w http.ResponseWriter, r *http.Request) error {
+func (m *module) Post(
+	t jwt.Token,
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		return Err(r, err, "failed to read body")
@@ -63,7 +69,7 @@ func (m *module) Post(a auth, w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Update the domain modules with the modules from the request.
-	err = m.c.UpdateModules(r.Context(), a.id, mdata.ID, mdata.Modules...)
+	err = m.c.UpdateModules(r.Context(), t.Subject(), mdata.ID, mdata.Modules...)
 	if err != nil {
 		return Err(r, err, "failed to update modules")
 	}
@@ -85,7 +91,11 @@ func (m *module) Post(a auth, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (m *module) Delete(a auth, w http.ResponseWriter, r *http.Request) error {
+func (m *module) Delete(
+	t jwt.Token,
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
 	id, err := uuid.Parse(r.URL.Query().Get("id"))
 	if err != nil {
 		return Err(r, err, "invalid id")
@@ -96,7 +106,7 @@ func (m *module) Delete(a auth, w http.ResponseWriter, r *http.Request) error {
 		return Err(r, nil, "missing mod")
 	}
 
-	err = m.c.DeleteModule(r.Context(), a.id, id.String(), mod)
+	err = m.c.DeleteModule(r.Context(), t.Subject(), id.String(), mod)
 	if err != nil {
 		return Err(
 			r,

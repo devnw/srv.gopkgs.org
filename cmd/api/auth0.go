@@ -2,85 +2,82 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/lestrrat-go/jwx/jwk"
 	"github.com/lestrrat-go/jwx/jwt"
-	"go.devnw.com/alog"
+	"go.devnw.com/event"
 )
 
 type AUTHKEY string
 
 const (
-	corsAllowedDomain = "http://localhost:8080"
-	authHeader        = "Authorization"
-	ctxTokenKey       = AUTHKEY("Auth0Token")
-	authPrefix        = "Bearer "
+	authHeader  = "Authorization"
+	ctxTokenKey = AUTHKEY("Auth0Token")
+	authPrefix  = "Bearer "
 )
 
-var (
-	tenantKeys jwk.Set
-)
-
-type message struct {
-	Message string `json:"message"`
+type Authentication struct {
+	*event.Publisher
+	keys jwk.Set
 }
 
-func sendMessage(rw http.ResponseWriter, data *message) {
-	bytes, err := json.Marshal(data)
+func Authenticator(
+	ctx context.Context,
+	jwksrc *url.URL,
+) (*Authentication, error) {
+	// fetch and parse the tenant JSON Web Keys (JWK). The keys are used for JWT
+	// token validation during requests authorization.
+	jwks, err := jwk.Fetch(context.Background(), jwksrc.String())
 	if err != nil {
-		alog.Print("json conversion error", err)
-		return
+		return nil, err
 	}
-	_, err = rw.Write(bytes)
-	if err != nil {
-		alog.Print("http response write error", err)
-	}
+
+	return &Authentication{event.NewPublisher(ctx), jwks}, nil
 }
 
-func handleCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		headers := rw.Header()
+// ValidateToken middleware verifies a valid Auth0 JWT token being present in the request.
+func (a *Authentication) ValidateToken(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		defer func() {
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 
-		// Allow-Origin header shall be part of ALL the responses
-		headers.Add("Access-Control-Allow-Origin", corsAllowedDomain)
-		if req.Method != http.MethodOptions {
-			next.ServeHTTP(rw, req)
+				// Push the error to the publisher for subscribers to pick up.
+				a.ErrorFunc(r.Context(), func() error {
+					return err
+				})
+			}
+		}()
+
+		var token jwt.Token
+		token, err = a.ExtractToken(r)
+		if err != nil {
+			err = Err(r, err, "AuthN: failed to extract auth token")
 			return
 		}
 
-		// process an HTTP OPTIONS preflight request
-		headers.Add("Access-Control-Allow-Headers", "Authorization")
-		headers.Add("Access-Control-Allow-Headers", "Content-Type")
-		rw.WriteHeader(http.StatusNoContent)
-
-		_, err := rw.Write(nil)
-		if err != nil {
-			alog.Print("http response (options) write error", err)
+		ev, ok := token.PrivateClaims()["https://gopkgs.org/email_verified"]
+		if !ok {
+			err = Err(r, err, "AuthN: failed to find email verification claim")
+			return
 		}
-	})
-}
 
-// validateToken middleware verifies a valid Auth0 JWT token being present in the request.
-func validateToken(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		token, err := extractToken(req)
-		if err != nil {
-			fmt.Printf("failed to parse payload: %s\n", err)
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{err.Error()})
+		verified, ok := ev.(bool)
+		if !ok || !verified {
+			err = Err(r, err, "AuthN: email not verified")
 			return
 		}
 
 		next.ServeHTTP(
-			rw,
-			req.WithContext(
+			w,
+			r.WithContext(
 				context.WithValue(
-					req.Context(),
+					r.Context(),
 					ctxTokenKey,
 					token,
 				),
@@ -89,11 +86,20 @@ func validateToken(next http.Handler) http.Handler {
 	})
 }
 
-// extractToken parses the Authorization HTTP header for valid JWT token and
+func Token(ctx context.Context) (jwt.Token, error) {
+	token, ok := ctx.Value(ctxTokenKey).(jwt.Token)
+	if !ok {
+		return nil, errors.New("failed to get auth token")
+	}
+
+	return token, nil
+}
+
+// ExtractToken parses the Authorization HTTP header for valid JWT token and
 // validates it with AUTH0 JWK keys. Also verifies if the audience present in
 // the token matches with the designated audience as per current configuration.
-func extractToken(req *http.Request) (jwt.Token, error) {
-	authorization := req.Header.Get(authHeader)
+func (a *Authentication) ExtractToken(r *http.Request) (jwt.Token, error) {
+	authorization := r.Header.Get(authHeader)
 	if authorization == "" {
 		return nil, errors.New("authorization header missing")
 	}
@@ -104,75 +110,8 @@ func extractToken(req *http.Request) (jwt.Token, error) {
 
 	return jwt.Parse(
 		[]byte(strings.TrimPrefix(authorization, authPrefix)),
-		jwt.WithKeySet(tenantKeys),
+		jwt.WithKeySet(a.keys),
 		jwt.WithValidate(true),
 		jwt.WithAudience(AUDIENCE),
 	)
-}
-
-// fetchTenantKeys fetch and parse the tenant JSON Web Keys (JWK). The keys
-// are used for JWT token validation during requests authorization.
-func fetchTenantKeys() {
-	set, err := jwk.Fetch(context.Background(),
-		fmt.Sprintf("https://%s/.well-known/jwks.json", DOMAIN))
-	if err != nil {
-		alog.Fatalf(err, "failed to parse tenant json web keys")
-	}
-	tenantKeys = set
-}
-
-type auth struct {
-	email string
-	id    string
-}
-
-func authInfo(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		token, err := extractToken(req)
-		if err != nil {
-			fmt.Printf("failed to parse payload: %s\n", err)
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{err.Error()})
-			return
-		}
-
-		e, ok := token.PrivateClaims()["https://gopkgs.org/email"]
-		if !ok {
-			fmt.Printf("failed to find email claim\n")
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{"failed to find email claim"})
-			return
-		}
-
-		ev, ok := token.PrivateClaims()["https://gopkgs.org/email_verified"]
-		if !ok {
-			fmt.Printf("failed to find email claim\n")
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{"failed to find email claim"})
-			return
-		}
-
-		verified, ok := ev.(bool)
-		if !ok || !verified {
-			fmt.Printf("email not verified\n")
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{"email not verified"})
-			return
-		}
-
-		email, ok := e.(string)
-		if !ok {
-			fmt.Printf("failed to convert email claim\n")
-			rw.WriteHeader(http.StatusUnauthorized)
-			sendMessage(rw, &message{"failed to convert email claim"})
-			return
-		}
-
-		ctxWithToken := context.WithValue(req.Context(), authNCtxKey, auth{
-			email: email,
-			id:    token.Subject(),
-		})
-
-		next.ServeHTTP(rw, req.WithContext(ctxWithToken))
-	})
 }
