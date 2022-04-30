@@ -82,7 +82,7 @@ func (v *verify) Get(jtok jwt.Token, w http.ResponseWriter, r *http.Request) err
 			r.Context(),
 			jtok.Subject(),
 			id.String(),
-			host.Token.Validated,
+			nil,
 		)
 		if err2 != nil {
 			return Err(r, Err(r, err, "failed to verify token"), err2.Error())
@@ -91,11 +91,13 @@ func (v *verify) Get(jtok jwt.Token, w http.ResponseWriter, r *http.Request) err
 		return Err(r, err, "failed to verify token")
 	}
 
+	validated := time.Now()
+
 	// Update the database
 	return v.c.UpdateDomainToken(
 		r.Context(),
 		jtok.Subject(),
 		id.String(),
-		host.Token.Validated,
+		&validated,
 	)
 }
