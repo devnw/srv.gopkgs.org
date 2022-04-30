@@ -113,6 +113,77 @@ func (c *Client) DeleteDomain(
 	return nil
 }
 
+func (c *Client) NewDomainToken(
+	ctx context.Context,
+	userID string,
+	domainID string,
+) (*dns.Token, error) {
+	domainRef, err := c.domainByID(ctx, userID, domainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	var domain *gois.Host
+	err = domainRef.DataTo(domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	// The domain is already validated so just return the existing token
+	if domain.Token.Validated != nil {
+		return domain.Token, nil
+	}
+
+	token, err := dns.NewToken(
+		domain.Domain,
+		c.domainTokenKey,
+		&c.domtainTokenExp,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %s", err)
+	}
+
+	_, err = domainRef.Ref.Update(ctx, []firestore.Update{
+		{
+			Path:  "Token",
+			Value: token,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update token: %s", err)
+	}
+
+	return token, nil
+}
+
+func (c *Client) UpdateDomainToken(
+	ctx context.Context,
+	userID string,
+	domainID string,
+	validated *time.Time,
+) error {
+	domain, err := c.domainByID(ctx, userID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	_, err = domain.Ref.Update(ctx, []firestore.Update{
+		{
+			Path:  "Token.Validated",
+			Value: validated,
+		},
+		{
+			Path:  "Token.Updated",
+			Value: time.Now(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update token: %s", err)
+	}
+
+	return nil
+}
+
 func (c *Client) domainByID(
 	ctx context.Context,
 	userID,

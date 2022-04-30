@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
 )
@@ -33,19 +35,33 @@ func (t *token) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
-	case http.MethodPost:
-		err = t.Post(jtok, w, r)
-	case http.MethodDelete:
-		err = t.Delete(jtok, w, r)
+	case http.MethodGet:
+		err = t.Get(jtok, w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (t *token) Post(jtok jwt.Token, w http.ResponseWriter, r *http.Request) error {
-	return nil
-}
+func (t *token) Get(jtok jwt.Token, w http.ResponseWriter, r *http.Request) error {
+	id, err := uuid.Parse(r.URL.Query().Get("id"))
+	if err != nil {
+		return Err(r, err, "invalid id")
+	}
 
-func (t *token) Delete(jtok jwt.Token, w http.ResponseWriter, r *http.Request) error {
-	return nil
+	token, err := t.c.NewDomainToken(r.Context(), jtok.Subject(), id.String())
+	if err != nil {
+		return Err(r, err, "failed to get domain")
+	}
+
+	if token == nil {
+		return Err(r, err, "no token for domain")
+	}
+
+	data, err := json.Marshal(token)
+	if err != nil {
+		return Err(r, err, "failed to marshal token")
+	}
+
+	_, err = w.Write(data)
+	return err
 }

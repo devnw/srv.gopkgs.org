@@ -22,7 +22,7 @@ type module struct {
 	p *event.Publisher
 }
 
-//nolint:dupl
+
 func (m *module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {

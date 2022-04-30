@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"go.devnw.com/alog"
+	"go.devnw.com/dns"
 	"go.devnw.com/event"
 	"go.devnw.com/gois"
 	"go.devnw.com/gois/db"
@@ -28,11 +30,14 @@ const (
 	TOKENKEY = "gopkgs_domain_token"
 
 	TOKENTIMEOUT = time.Hour * 24 * 7
+
+	EMAILVERIFICATIONCLAIM = "https://gopkgs.org/email_verified"
 )
 
 // Compile the regex immediately.
 var DomainReggy = regexp.MustCompile(DOMAINREGEX)
 var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", DOMAIN)
+var Resolver = net.DefaultResolver
 
 type DB interface {
 	GetDomains(ctx context.Context, userID string) ([]*gois.Host, error)
@@ -67,15 +72,23 @@ type DB interface {
 		domainID string,
 		path string,
 	) error
+
+	NewDomainToken(
+		ctx context.Context,
+		userID string,
+		domainID string,
+	) (*dns.Token, error)
+
+	UpdateDomainToken(
+		ctx context.Context,
+		userID string,
+		domainID string,
+		validated *time.Time,
+	) error
 }
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	p := event.NewPublisher(ctx)
-
-	err := alog.Global(
+func configLogger(ctx context.Context) error {
+	return alog.Global(
 		ctx,
 		"api.gopkgs.org",
 		alog.DEFAULTTIMEFORMAT,
@@ -94,6 +107,15 @@ func main() {
 			},
 		}...,
 	)
+}
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	p := event.NewPublisher(ctx)
+
+	err := configLogger(ctx)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -109,7 +131,7 @@ func main() {
 		return
 	}
 
-	auth, err := Authenticator(ctx, jwks)
+	auth, err := Authenticator(ctx, jwks, EMAILVERIFICATIONCLAIM)
 	if err != nil {
 		alog.Fatalf(err, "failed to create authenticator")
 		return
@@ -152,6 +174,12 @@ func main() {
 	router.Handle(
 		"/token",
 		&token{client, p},
+	)
+
+	// TODO: Add validation check and new token request
+	router.Handle(
+		"/verify",
+		&verify{client, p, Resolver},
 	)
 
 	server := &http.Server{
