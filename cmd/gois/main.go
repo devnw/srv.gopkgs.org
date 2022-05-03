@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -14,17 +15,21 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	secrets "cloud.google.com/go/secretmanager/apiv1"
-	"github.com/davecgh/go-spew/spew"
 	"go.devnw.com/alog"
 	"go.devnw.com/gois"
+	"go.devnw.com/gois/secrets"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 )
 
-func serve(ctx context.Context) {
-	dm, err := New(ctx, "gopkgs-342114")
+type secretManager interface {
+	io.Closer
+	Get(ctx context.Context, key string) ([]byte, error)
+	Put(ctx context.Context, key string, data []byte) error
+}
+
+func serve(ctx context.Context, sm secretManager, projectID string) {
+	dm, err := New(ctx, sm, projectID)
 	if err != nil {
 		panic(err)
 	}
@@ -36,13 +41,18 @@ func serve(ctx context.Context) {
 	alog.Fatal(http.Serve(dm.Listener(ctx), mux))
 }
 
+const (
+	projectID = "gopkgs-342114"
+	logPrefix = "api.gopkgs.org"
+)
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	err := alog.Global(
 		ctx,
-		"api.gopkgs.org",
+		logPrefix,
 		alog.DEFAULTTIMEFORMAT,
 		time.UTC,
 		0,
@@ -64,16 +74,15 @@ func main() {
 		return
 	}
 
-	serve(ctx)
-}
-
-func New(ctx context.Context, projectID string) (*DomainManager, error) {
-	// Create the secrets Client.
-	secretsClient, err := secrets.NewClient(ctx)
+	sm, err := secrets.NewManager(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup client: %v", err)
+		alog.Fatal(err)
 	}
 
+	serve(ctx, sm, projectID)
+}
+
+func New(ctx context.Context, sm secretManager, projectID string) (*DomainManager, error) {
 	firestoreClient, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -83,7 +92,7 @@ func New(ctx context.Context, projectID string) (*DomainManager, error) {
 		ctx:       ctx,
 		projectID: projectID,
 		firestore: firestoreClient,
-		secrets:   secretsClient, // pragma: allowlist secret
+		secrets:   sm, // pragma: allowlist secret
 		dirCache:  autocert.DirCache(filepath.Join(os.TempDir(), projectID)),
 		cache:     map[string]*gois.Host{},
 	}, nil
@@ -93,7 +102,7 @@ type DomainManager struct {
 	ctx       context.Context
 	projectID string
 	firestore *firestore.Client
-	secrets   *secrets.Client
+	secrets   secretManager
 	dirCache  autocert.DirCache
 
 	cache   map[string]*gois.Host
@@ -282,42 +291,42 @@ func (dm *DomainManager) Get(ctx context.Context, key string) ([]byte, error) {
 		return data, nil
 	}
 
-	result, err := dm.getSecret(ctx, key)
+	data, err = dm.secrets.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 
 	// Return the certificate data, and add it to the local cache.
-	return result.Payload.Data, dm.dirCache.Put(ctx, key, result.Payload.Data)
+	return data, dm.dirCache.Put(ctx, key, data)
 }
 
-func (dm *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.AccessSecretVersionResponse, error) {
-	alog.Debugf(nil, "getSecret: %s", key)
+// func (dm *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.AccessSecretVersionResponse, error) {
+// 	alog.Debugf(nil, "getSecret: %s", key)
 
-	// Lookup the latest secret for this key in secrets manager.
-	accessRequest := &secretspb.AccessSecretVersionRequest{
-		Name: fmt.Sprintf(
-			"projects/%s/secrets/%s/versions/latest",
-			dm.projectID,
-			key,
-		),
-	}
+// 	// Lookup the latest secret for this key in secrets manager.
+// 	accessRequest := &secretspb.AccessSecretVersionRequest{
+// 		Name: fmt.Sprintf(
+// 			"projects/%s/secrets/%s/versions/latest",
+// 			dm.projectID,
+// 			key,
+// 		),
+// 	}
 
-	// Execute the request
-	result, err := dm.secrets.AccessSecretVersion(ctx, accessRequest)
-	if err != nil {
-		alog.Debugf(
-			nil,
-			"getSecret: Unable to find %s at %s", // pragma: allowlist secret
-			key,                                  // pragma: allowlist secret
-			accessRequest.Name,
-		)
-		return nil, autocert.ErrCacheMiss
-	}
+// 	// Execute the request
+// 	result, err := dm.secrets.AccessSecretVersion(ctx, accessRequest)
+// 	if err != nil {
+// 		alog.Debugf(
+// 			nil,
+// 			"getSecret: Unable to find %s at %s", // pragma: allowlist secret
+// 			key,                                  // pragma: allowlist secret
+// 			accessRequest.Name,
+// 		)
+// 		return nil, autocert.ErrCacheMiss
+// 	}
 
-	alog.Debugf(nil, "getSecret: FOUND %s", key) // pragma: allowlist secret
-	return result, nil
-}
+// 	alog.Debugf(nil, "getSecret: FOUND %s", key) // pragma: allowlist secret
+// 	return result, nil
+// }
 
 // Put stores the data in the cache under the specified key.
 // Underlying implementations may use any data storage format,
@@ -325,57 +334,15 @@ func (dm *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.
 func (dm *DomainManager) Put(ctx context.Context, key string, data []byte) error {
 	key = sha(key)
 
-	var name string
-
-	// Only add to secrets manager if the key doesn't already exist
-	result, err := dm.getSecret(ctx, key)
-	if err == nil {
-		alog.Printf("key [%s] already exists in secrets manager", key)
-		name = result.Name
-	} else {
-		alog.Printf("Put %s; result %s", key, spew.Sdump(result))
-
-		// push to secret manager
-		// Create the request to create the secret.
-		createSecretReq := &secretspb.CreateSecretRequest{
-			Parent:   fmt.Sprintf("projects/%s", dm.projectID),
-			SecretId: key, // pragma: allowlist secret
-			Secret: &secretspb.Secret{
-				Replication: &secretspb.Replication{
-					Replication: &secretspb.Replication_Automatic_{
-						Automatic: &secretspb.Replication_Automatic{},
-					},
-				},
-			},
-		}
-
-		alog.Printf("Put Secret Request%s", spew.Sdump(createSecretReq))
-
-		var secret *secretspb.Secret
-		secret, err = dm.secrets.CreateSecret(ctx, createSecretReq)
-		if err != nil {
-			alog.Fatalf(err, "failed to create secret")
-		}
-
-		name = secret.Name
-	}
-
-	// Update the version of the secret
-	addSecretVersionReq := &secretspb.AddSecretVersionRequest{
-		Parent: name,
-		Payload: &secretspb.SecretPayload{
-			Data: data,
-		},
-	}
-
-	// Call the API.
-	_, err = dm.secrets.AddSecretVersion(ctx, addSecretVersionReq)
-	if err != nil {
-		alog.Fatalf(err, "failed to add secret version")
-	}
-
 	// Store local cache for quick lookup.
-	_ = dm.dirCache.Put(ctx, key, data)
+	defer func() {
+		_ = dm.dirCache.Put(ctx, key, data)
+	}()
+
+	err := dm.secrets.Put(ctx, key, data)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
