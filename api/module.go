@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -17,8 +17,26 @@ type moduleData struct {
 	Modules []*gois.Module
 }
 
+func Module(c gois.DB, p *event.Publisher) (http.Handler, error) {
+	if c == nil {
+		return nil, &Error{
+			Endpoint: "module",
+			Message:  "db is nil",
+		}
+	}
+
+	if p == nil {
+		return nil, &Error{
+			Endpoint: "module",
+			Message:  "publisher is nil",
+		}
+	}
+
+	return &module{c, p}, nil
+}
+
 type module struct {
-	c DB
+	c gois.DB
 	p *event.Publisher
 }
 
@@ -36,7 +54,7 @@ func (m *module) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var t jwt.Token
-	t, err = Token(r.Context())
+	t, err = AuthToken(r.Context())
 	if err != nil {
 		return
 	}

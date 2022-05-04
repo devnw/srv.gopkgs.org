@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -7,10 +7,29 @@ import (
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
+	"go.devnw.com/gois"
 )
 
+func Token(c gois.DB, p *event.Publisher) (http.Handler, error) {
+	if c == nil {
+		return nil, &Error{
+			Endpoint: "token",
+			Message:  "db is nil",
+		}
+	}
+
+	if p == nil {
+		return nil, &Error{
+			Endpoint: "token",
+			Message:  "publisher is nil",
+		}
+	}
+
+	return &token{c, p}, nil
+}
+
 type token struct {
-	c DB
+	c gois.DB
 	p *event.Publisher
 }
 
@@ -29,7 +48,7 @@ func (t *token) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var jtok jwt.Token
-	jtok, err = Token(r.Context())
+	jtok, err = AuthToken(r.Context())
 	if err != nil {
 		return
 	}

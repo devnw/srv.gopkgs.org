@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"net/http"
@@ -8,10 +8,36 @@ import (
 	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/dns"
 	"go.devnw.com/event"
+	"go.devnw.com/gois"
 )
 
+func Verify(c gois.DB, p *event.Publisher, r dns.Resolver) (http.Handler, error) {
+	if c == nil {
+		return nil, &Error{
+			Endpoint: "verify",
+			Message:  "db is nil",
+		}
+	}
+
+	if p == nil {
+		return nil, &Error{
+			Endpoint: "verify",
+			Message:  "publisher is nil",
+		}
+	}
+
+	if r == nil {
+		return nil, &Error{
+			Endpoint: "verify",
+			Message:  "nil resolver",
+		}
+	}
+
+	return &verify{c, p, r}, nil
+}
+
 type verify struct {
-	c        DB
+	c        gois.DB
 	p        *event.Publisher
 	resolver dns.Resolver
 }
@@ -31,7 +57,7 @@ func (v *verify) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var jtok jwt.Token
-	jtok, err = Token(r.Context())
+	jtok, err = AuthToken(r.Context())
 	if err != nil {
 		return
 	}
@@ -50,7 +76,7 @@ func (v *verify) Get(jtok jwt.Token, w http.ResponseWriter, r *http.Request) err
 		return Err(r, err, "invalid id")
 	}
 
-	host, err := v.c.GetDomain(r.Context(), jtok.Subject(), id.String())
+	host, err := v.c.GetDomainForUser(r.Context(), jtok.Subject(), id.String())
 	if err != nil {
 		return Err(r, err, "failed to get domain")
 	}

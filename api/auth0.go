@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -24,12 +24,14 @@ type Authentication struct {
 	*event.Publisher
 	keys       jwk.Set
 	emailClaim string
+	audience   string
 }
 
 func Authenticator(
 	ctx context.Context,
 	jwksrc *url.URL,
 	emailClaim string,
+	audience string,
 ) (*Authentication, error) {
 	// fetch and parse the tenant JSON Web Keys (JWK). The keys are used for JWT
 	// token validation during requests authorization.
@@ -38,7 +40,7 @@ func Authenticator(
 		return nil, err
 	}
 
-	return &Authentication{event.NewPublisher(ctx), jwks, emailClaim}, nil
+	return &Authentication{event.NewPublisher(ctx), jwks, emailClaim, audience}, nil
 }
 
 // ValidateToken middleware verifies a valid Auth0 JWT token being present in the request.
@@ -88,7 +90,7 @@ func (a *Authentication) ValidateToken(next http.Handler) http.Handler {
 	})
 }
 
-func Token(ctx context.Context) (jwt.Token, error) {
+func AuthToken(ctx context.Context) (jwt.Token, error) {
 	token, ok := ctx.Value(ctxTokenKey).(jwt.Token)
 	if !ok {
 		return nil, errors.New("failed to get auth token")
@@ -114,6 +116,6 @@ func (a *Authentication) ExtractToken(r *http.Request) (jwt.Token, error) {
 		[]byte(strings.TrimPrefix(authorization, authPrefix)),
 		jwt.WithKeySet(a.keys),
 		jwt.WithValidate(true),
-		jwt.WithAudience(AUDIENCE),
+		jwt.WithAudience(a.audience),
 	)
 }

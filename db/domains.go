@@ -14,7 +14,7 @@ import (
 
 const DAY = time.Hour * 24
 
-func (c *Client) GetDomain(
+func (c *Client) GetDomainForUser(
 	ctx context.Context,
 	userID string,
 	domainID string,
@@ -33,7 +33,33 @@ func (c *Client) GetDomain(
 	return h, nil
 }
 
-func (c *Client) GetDomains(ctx context.Context, userID string) ([]*gois.Host, error) {
+func (c *Client) GetDomainByName(
+	ctx context.Context,
+	domain string,
+) (*gois.Host, error) {
+	d, err := c.firestore.Collection("domains").Doc(domain).Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get domain: %s", err)
+	}
+
+	h := &gois.Host{}
+	err = d.DataTo(h)
+	if err != nil {
+		err = fmt.Errorf(
+			"failed to map domain [%s] to object: %s",
+			domain,
+			err,
+		)
+		return nil, err
+	}
+
+	return h, nil
+}
+
+func (c *Client) GetDomains(
+	ctx context.Context,
+	userID string,
+) ([]*gois.Host, error) {
 	domains := []*gois.Host{}
 	iter := c.domains(ctx, userID).Documents(ctx)
 	for {

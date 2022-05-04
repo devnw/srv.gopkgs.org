@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwt"
 	"go.devnw.com/event"
+	"go.devnw.com/gois"
 )
 
 type newDomain struct {
@@ -19,15 +20,33 @@ func (d *newDomain) validate() error {
 		return errors.New("domain is empty")
 	}
 
-	if !DomainReggy.MatchString(d.Domain) {
+	if !gois.DomainReggy.MatchString(d.Domain) {
 		return errors.New("domain is invalid")
 	}
 
 	return nil
 }
 
+func Domain(c gois.DB, p *event.Publisher) (http.Handler, error) {
+	if c == nil {
+		return nil, &Error{
+			Endpoint: "domain",
+			Message:  "db is nil",
+		}
+	}
+
+	if p == nil {
+		return nil, &Error{
+			Endpoint: "domain",
+			Message:  "publisher is nil",
+		}
+	}
+
+	return &domain{c, p}, nil
+}
+
 type domain struct {
-	c DB
+	c gois.DB
 	p *event.Publisher
 }
 
@@ -45,7 +64,7 @@ func (d *domain) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var t jwt.Token
-	t, err = Token(r.Context())
+	t, err = AuthToken(r.Context())
 	if err != nil {
 		return
 	}

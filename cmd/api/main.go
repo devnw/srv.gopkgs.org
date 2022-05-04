@@ -7,22 +7,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"time"
 
 	"go.devnw.com/alog"
-	"go.devnw.com/dns"
 	"go.devnw.com/event"
 	"go.devnw.com/gois"
+	"go.devnw.com/gois/api"
 	"go.devnw.com/gois/db"
 )
 
 const (
 	AUDIENCE = "https://api.gopkgs.org"
 	DOMAIN   = "devnw.us.auth0.com"
-
-	//nolint:lll
-	DOMAINREGEX = `^(?:(?:[a-zA-Z0-9])(?:[a-zA-Z0-9\-.]){1,61}(?:\.[a-zA-Z]{2,})+|\[(?:(?:(?:[a-fA-F0-9]){1,4})(?::(?:[a-fA-F0-9]){1,4}){7}|::1|::)\]|(?:(?:[0-9]{1,3})(?:\.[0-9]{1,3}){3}))(?::[0-9]{1,5})?$`
 
 	PROJECT = "gopkgs-342114"
 
@@ -34,58 +30,8 @@ const (
 	EMAILVERIFICATIONCLAIM = "https://gopkgs.org/email_verified"
 )
 
-// Compile the regex immediately.
-var DomainReggy = regexp.MustCompile(DOMAINREGEX)
 var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", DOMAIN)
 var Resolver = net.DefaultResolver
-
-type DB interface {
-	GetDomains(ctx context.Context, userID string) ([]*gois.Host, error)
-	GetDomain(
-		ctx context.Context,
-		userID string,
-		domainID string,
-	) (*gois.Host, error)
-
-	CreateDomain(
-		ctx context.Context,
-		userID string,
-		domain string,
-	) (*gois.Host, error)
-
-	DeleteDomain(
-		ctx context.Context,
-		userID string,
-		domainID string,
-	) error
-
-	UpdateModules(
-		ctx context.Context,
-		userID string,
-		domainID string,
-		modules ...*gois.Module,
-	) error
-
-	DeleteModule(
-		ctx context.Context,
-		userID string,
-		domainID string,
-		path string,
-	) error
-
-	NewDomainToken(
-		ctx context.Context,
-		userID string,
-		domainID string,
-	) (*dns.Token, error)
-
-	UpdateDomainToken(
-		ctx context.Context,
-		userID string,
-		domainID string,
-		validated *time.Time,
-	) error
-}
 
 func configLogger(ctx context.Context) error {
 	return alog.Global(
@@ -131,7 +77,7 @@ func main() {
 		return
 	}
 
-	auth, err := Authenticator(ctx, jwks, EMAILVERIFICATIONCLAIM)
+	auth, err := api.Authenticator(ctx, jwks, EMAILVERIFICATIONCLAIM, AUDIENCE)
 	if err != nil {
 		alog.Fatalf(err, "failed to create authenticator")
 		return
@@ -157,32 +103,19 @@ func main() {
 		return
 	}
 
-	router := http.NewServeMux()
-	router.Handle("/", http.NotFoundHandler())
+	defer func() {
+		_ = client.Close()
+	}()
 
-	router.Handle(
-		"/domains",
-		&domain{client, p},
-	)
-
-	router.Handle(
-		"/modules",
-		&module{client, p},
-	)
-
-	router.Handle(
-		"/token",
-		&token{client, p},
-	)
-
-	router.Handle(
-		"/verify",
-		&verify{client, p, Resolver},
-	)
+	router, err := registerHandlers(client, p)
+	if err != nil {
+		alog.Fatalf(err, "failed to register handlers")
+		return
+	}
 
 	server := &http.Server{
 		Addr: ":6060",
-		Handler: JSON(
+		Handler: api.JSON(
 			auth.ValidateToken(
 				router,
 			),
@@ -191,4 +124,48 @@ func main() {
 
 	alog.Printf("API server listening on %s", server.Addr)
 	alog.Fatal(server.ListenAndServe())
+}
+
+func registerHandlers(client gois.DB, p *event.Publisher) (*http.ServeMux, error) {
+	router := http.NewServeMux()
+	router.Handle("/", http.NotFoundHandler())
+
+	domainHandler, err := api.Domain(client, p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create domain handler: %s", err)
+	}
+
+	router.Handle(
+		"/domains",
+		domainHandler,
+	)
+
+	moduleHandler, err := api.Module(client, p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create module handler: %s", err)
+	}
+	router.Handle(
+		"/modules",
+		moduleHandler,
+	)
+
+	tokenHandler, err := api.Token(client, p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token handler: %s", err)
+	}
+	router.Handle(
+		"/token",
+		tokenHandler,
+	)
+
+	verifyHandler, err := api.Verify(client, p, Resolver)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create verify handler: %s", err)
+	}
+	router.Handle(
+		"/verify",
+		verifyHandler,
+	)
+
+	return router, nil
 }

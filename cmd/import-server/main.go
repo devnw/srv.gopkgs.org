@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	_ "embed"
 	"fmt"
 	"io"
 	"net"
@@ -14,9 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/firestore"
 	"go.devnw.com/alog"
+	"go.devnw.com/dns"
 	"go.devnw.com/gois"
+	"go.devnw.com/gois/db"
 	"go.devnw.com/gois/secrets"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
@@ -28,23 +28,18 @@ type secretManager interface {
 	Put(ctx context.Context, key string, data []byte) error
 }
 
-func serve(ctx context.Context, sm secretManager, projectID string) {
-	dm, err := New(ctx, sm, projectID)
-	if err != nil {
-		panic(err)
-	}
-	defer dm.Close()
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", dm.Handler)
-
-	alog.Fatal(http.Serve(dm.Listener(ctx), mux))
-}
-
 const (
-	projectID = "gopkgs-342114"
-	logPrefix = "api.gopkgs.org"
+	PROJECT = "gopkgs-342114"
+
+	//nolint:gosec
+	TOKENKEY = "gopkgs_domain_token"
+
+	TOKENTIMEOUT = time.Hour * 24 * 7
+
+	logPrefix = "srv.gopkgs.org"
 )
+
+var resolver dns.Resolver = net.DefaultResolver
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -74,24 +69,49 @@ func main() {
 		return
 	}
 
-	sm, err := secrets.NewManager(ctx, projectID)
+	// Create a new secrets manager client.
+	sm, err := secrets.NewManager(ctx, PROJECT)
 	if err != nil {
 		alog.Fatal(err)
 	}
 
-	serve(ctx, sm, projectID)
-}
+	defer func() {
+		_ = sm.Close()
+	}()
 
-func New(ctx context.Context, sm secretManager, projectID string) (*DomainManager, error) {
-	firestoreClient, err := firestore.NewClient(ctx, projectID)
+	// Create the database connection
+	client, err := db.New(ctx, PROJECT, TOKENKEY, TOKENTIMEOUT)
 	if err != nil {
-		return nil, err
+		fmt.Printf("failed to create database client: %s\n", err)
+		return
 	}
 
+	defer func() {
+		_ = client.Close()
+	}()
+
+	dm, err := New(ctx, client, sm, resolver, PROJECT)
+	if err != nil {
+		alog.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", dm.Handler)
+
+	alog.Fatal(http.Serve(dm.Listener(ctx), mux))
+}
+
+func New(
+	ctx context.Context,
+	datab gois.DB,
+	sm secretManager,
+	r dns.Resolver,
+	projectID string,
+) (*DomainManager, error) {
 	return &DomainManager{
 		ctx:       ctx,
 		projectID: projectID,
-		firestore: firestoreClient,
+		db:        datab,
 		secrets:   sm, // pragma: allowlist secret
 		dirCache:  autocert.DirCache(filepath.Join(os.TempDir(), projectID)),
 		cache:     map[string]*gois.Host{},
@@ -101,24 +121,13 @@ func New(ctx context.Context, sm secretManager, projectID string) (*DomainManage
 type DomainManager struct {
 	ctx       context.Context
 	projectID string
-	firestore *firestore.Client
+	db        gois.DB
 	secrets   secretManager
 	dirCache  autocert.DirCache
+	resolver  dns.Resolver
 
 	cache   map[string]*gois.Host
 	cacheMu sync.RWMutex
-}
-
-func (dm *DomainManager) Close() {
-	err := dm.firestore.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	err = dm.secrets.Close()
-	if err != nil {
-		panic(err)
-	}
 }
 
 func (dm *DomainManager) Listener(ctx context.Context) net.Listener {
@@ -208,29 +217,12 @@ func (dm *DomainManager) VerifyHost(ctx context.Context, domain string) (host *g
 		}
 	}()
 
-	var d *firestore.DocumentSnapshot
-	d, err = dm.firestore.Collection("domains").Doc(domain).Get(ctx)
+	host, err = dm.db.GetDomainByName(ctx, domain)
 	if err != nil {
-		err = fmt.Errorf(
-			"failed to lookup host [%s] in firestore: %s",
-			domain,
-			err,
-		)
 		return nil, err
 	}
 
-	h := &gois.Host{}
-	err = d.DataTo(h)
-	if err != nil {
-		err = fmt.Errorf(
-			"failed to map host [%s] to object: %s",
-			domain,
-			err,
-		)
-		return nil, err
-	}
-
-	if h.Token == nil {
+	if host.Token == nil {
 		err = fmt.Errorf(
 			"invalid nil token for host [%s]",
 			domain,
@@ -238,28 +230,21 @@ func (dm *DomainManager) VerifyHost(ctx context.Context, domain string) (host *g
 		return nil, err
 	}
 
-	if h.Token.Validated == nil ||
-		h.Token.Updated.Before(time.Now().Add(-24*time.Hour)) {
-		err = h.Token.Verify(ctx, net.DefaultResolver)
+	if host.Token.Validated == nil ||
+		host.Token.Updated.Before(time.Now().Add(-24*time.Hour)) {
+		err = host.Token.Verify(ctx, dm.resolver)
 		if err != nil {
 			err = fmt.Errorf(
 				"unable to resolve host [%s:%s] for DNS verification: %s",
 				domain,
-				h.Token.String(),
+				host.Token.String(),
 				err,
 			)
 
 			return nil, err
 		}
 
-		t := time.Now()
-		if h.Token.Validated == nil {
-			h.Token.Validated = &t
-		}
-
-		h.Token.Updated = &t
-
-		_, err = dm.firestore.Collection("domains").Doc(domain).Set(ctx, h)
+		err = dm.db.UpdateDomainToken(ctx, host.Owner, host.ID, host.Token.Validated)
 		if err != nil {
 			err = fmt.Errorf(
 				"failed to update host [%s] record: %s",
@@ -271,7 +256,7 @@ func (dm *DomainManager) VerifyHost(ctx context.Context, domain string) (host *g
 		}
 	}
 
-	return h, err
+	return host, err
 }
 
 func sha(in string) string {
@@ -300,34 +285,6 @@ func (dm *DomainManager) Get(ctx context.Context, key string) ([]byte, error) {
 	return data, dm.dirCache.Put(ctx, key, data)
 }
 
-// func (dm *DomainManager) getSecret(ctx context.Context, key string) (*secretspb.AccessSecretVersionResponse, error) {
-// 	alog.Debugf(nil, "getSecret: %s", key)
-
-// 	// Lookup the latest secret for this key in secrets manager.
-// 	accessRequest := &secretspb.AccessSecretVersionRequest{
-// 		Name: fmt.Sprintf(
-// 			"projects/%s/secrets/%s/versions/latest",
-// 			dm.projectID,
-// 			key,
-// 		),
-// 	}
-
-// 	// Execute the request
-// 	result, err := dm.secrets.AccessSecretVersion(ctx, accessRequest)
-// 	if err != nil {
-// 		alog.Debugf(
-// 			nil,
-// 			"getSecret: Unable to find %s at %s", // pragma: allowlist secret
-// 			key,                                  // pragma: allowlist secret
-// 			accessRequest.Name,
-// 		)
-// 		return nil, autocert.ErrCacheMiss
-// 	}
-
-// 	alog.Debugf(nil, "getSecret: FOUND %s", key) // pragma: allowlist secret
-// 	return result, nil
-// }
-
 // Put stores the data in the cache under the specified key.
 // Underlying implementations may use any data storage format,
 // as long as the reverse operation, Get, results in the original data.
@@ -351,8 +308,6 @@ func (dm *DomainManager) Put(ctx context.Context, key string, data []byte) error
 // If there's no such key in the cache, Delete returns nil.
 func (dm *DomainManager) Delete(ctx context.Context, key string) error {
 	key = sha(key)
-
-	// Delete secret in secrets manager.
 
 	// Delete local cache.
 	_ = dm.dirCache.Delete(ctx, key)
