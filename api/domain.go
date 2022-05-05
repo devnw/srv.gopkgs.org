@@ -1,14 +1,24 @@
 package api
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/jwt"
+	"go.devnw.com/dns"
 	"go.devnw.com/event"
 	"go.devnw.com/gois"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 type newDomain struct {
@@ -142,4 +152,193 @@ func (d *domain) Delete(t jwt.Token, w http.ResponseWriter, r *http.Request) err
 
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+func NewDomainManager(
+	ctx context.Context,
+	p *event.Publisher,
+	datab gois.DB,
+	certs gois.KVStore,
+	r dns.Resolver,
+) (*DomainManager, error) {
+	return &DomainManager{
+		ctx:   ctx,
+		p:     p,
+		db:    datab,
+		certs: certs, // pragma: allowlist secret
+		cache: map[string]*gois.Host{},
+	}, nil
+}
+
+type DomainManager struct {
+	ctx      context.Context
+	p        *event.Publisher
+	db       gois.DB
+	certs    gois.KVStore
+	dirCache autocert.DirCache
+	resolver dns.Resolver
+
+	cache   map[string]*gois.Host
+	cacheMu sync.RWMutex
+}
+
+func (dm *DomainManager) Listener(ctx context.Context) net.Listener {
+	m := &autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: dm.HostPolicy,
+		Cache:      &cacheWrapper{dm.certs},
+	}
+
+	l := m.Listener()
+	go func() {
+		<-ctx.Done()
+		err := l.Close()
+		if err != nil {
+			// TODO: log
+		}
+	}()
+
+	return l
+}
+
+// HostPolicy specifies which host names the Manager is allowed to respond to.
+// It returns a non-nil error if the host should be rejected.
+// The returned error is accessible via tls.Conn.Handshake and its callers.
+// See Manager's HostPolicy field and GetCertificate method docs for more details.
+func (dm *DomainManager) HostPolicy(ctx context.Context, domain string) error {
+	host, err := dm.VerifyHost(ctx, domain)
+	if err != nil {
+		return err
+	}
+
+	// Cache Host
+	dm.cacheMu.Lock()
+	defer dm.cacheMu.Unlock()
+
+	dm.cache[host.Domain] = host
+
+	return nil
+}
+
+func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
+	// Check cache
+	dm.cacheMu.RLock()
+	host, ok := dm.cache[r.TLS.ServerName]
+	dm.cacheMu.RUnlock()
+
+	if !ok {
+		var err error
+		host, err = dm.VerifyHost(dm.ctx, r.TLS.ServerName)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			dm.p.ErrorFunc(dm.ctx, func() error {
+				return fmt.Errorf("Failed to verify host: %v", err)
+			})
+			return
+		}
+
+		// Add to the cache
+		dm.cacheMu.Lock()
+		dm.cache[host.Domain] = host
+		dm.cacheMu.Unlock()
+	}
+
+	modPath := strings.TrimPrefix(r.URL.Path, "/")
+	module, ok := host.Modules[modPath]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		dm.p.ErrorFunc(dm.ctx, func() error {
+			return fmt.Errorf("No module for %s %s", host.Domain, modPath)
+		})
+		return
+	}
+
+	// Execute the module handler
+	err := module.Handle(w, r)
+	if err != nil {
+		dm.p.ErrorFunc(dm.ctx, func() error {
+			return err
+		})
+	}
+}
+
+func (dm *DomainManager) VerifyHost(
+	ctx context.Context,
+	domain string,
+) (host *gois.Host, err error) {
+	defer func() {
+		if err != nil {
+			dm.p.ErrorFunc(dm.ctx, func() error {
+				return err
+			})
+
+			// Override the error to ensure no data leakage to client
+			err = &acme.Error{
+				StatusCode: http.StatusNotFound,
+			}
+		}
+	}()
+
+	host, err = dm.db.GetDomainByName(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+
+	if host.Token == nil {
+		err = fmt.Errorf(
+			"invalid nil token for host [%s]",
+			domain,
+		)
+		return nil, err
+	}
+
+	if host.Token.Validated == nil ||
+		host.Token.Updated.Before(time.Now().Add(-24*time.Hour)) {
+		err = host.Token.Verify(ctx, dm.resolver)
+		if err != nil {
+			err = fmt.Errorf(
+				"unable to resolve host [%s:%s] for DNS verification: %s",
+				domain,
+				host.Token.String(),
+				err,
+			)
+
+			return nil, err
+		}
+
+		err = dm.db.UpdateDomainToken(ctx, host.Owner, host.ID, host.Token.Validated)
+		if err != nil {
+			err = fmt.Errorf(
+				"failed to update host [%s] record: %s",
+				domain,
+				err,
+			)
+
+			return nil, err
+		}
+	}
+
+	return host, err
+}
+
+func sha(in string) string {
+	return fmt.Sprintf("tls_%x", sha256.Sum256([]byte(in)))
+}
+
+// cacheWrapper is a wrapper around the gois.KVStore interface that sha256
+// hashes the key before passing it to the underlying KVStore.
+type cacheWrapper struct {
+	gois.KVStore
+}
+
+func (w *cacheWrapper) Get(ctx context.Context, key string) ([]byte, error) {
+	return w.KVStore.Get(ctx, sha(key))
+}
+
+func (w *cacheWrapper) Put(ctx context.Context, key string, data []byte) error {
+	return w.KVStore.Put(ctx, sha(key), data)
+}
+
+func (w *cacheWrapper) Delete(ctx context.Context, key string) error {
+	return w.KVStore.Delete(ctx, sha(key))
 }

@@ -82,6 +82,10 @@ func (m Manager) Put(ctx context.Context, key string, data []byte) error {
 	return nil
 }
 
+func (m Manager) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
 func (m Manager) get(
 	ctx context.Context,
 	key string,

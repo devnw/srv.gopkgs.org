@@ -28,6 +28,7 @@ const (
 	TOKENTIMEOUT = time.Hour * 24 * 7
 
 	EMAILVERIFICATIONCLAIM = "https://gopkgs.org/email_verified"
+	logPrefix              = "api.gopkgs.org"
 )
 
 var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", DOMAIN)
@@ -36,7 +37,7 @@ var Resolver = net.DefaultResolver
 func configLogger(ctx context.Context) error {
 	return alog.Global(
 		ctx,
-		"api.gopkgs.org",
+		logPrefix,
 		alog.DEFAULTTIMEFORMAT,
 		time.UTC,
 		0,

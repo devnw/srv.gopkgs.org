@@ -9,7 +9,6 @@ import (
 	"text/template"
 	"time"
 
-	"go.devnw.com/alog"
 	"go.devnw.com/dns"
 )
 
@@ -105,17 +104,13 @@ var fs embed.FS
 
 var tmpl = template.Must(template.ParseFS(fs, "template.go.html"))
 
-func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
-	alog.Printf("Serving Module: %+v\n", m)
-
+func (m *Module) Handle(w http.ResponseWriter, r *http.Request) error {
 	// Redirect the user to the documentation address if available
 	if r.URL.Query().Get("go-get") == "1" {
-		alog.Printf("Serving Module: %+v; GO-GET\n", m)
 		err := tmpl.Execute(w, m)
 		if err != nil {
-			alog.Printf("Error serving module: %+v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return fmt.Errorf("error serving module: %+v", err)
 		}
 	} else {
 		redirectURL := m.Docs
@@ -123,15 +118,16 @@ func (m *Module) Handle(w http.ResponseWriter, r *http.Request) {
 			u, _ := url.Parse(GOPKGS)
 			redirectURL = u
 		}
-		alog.Printf("Serving Module: %+v; REDIRECT\n", m)
 
 		if redirectURL == nil {
 			w.WriteHeader(http.StatusNotFound)
-			return
+			return fmt.Errorf("no redirect URL found for module: %+v", m)
 		}
 
 		http.Redirect(w, r, redirectURL.String(), http.StatusSeeOther)
 	}
+
+	return nil
 }
 
 func (m *Module) ModImport() string {
