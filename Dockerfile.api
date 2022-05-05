@@ -1,0 +1,5 @@
+FROM scratch
+
+COPY gopkgs-api /
+
+ENTRYPOINT [ "/gopkgs-api" ]

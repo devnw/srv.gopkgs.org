@@ -1,5 +1,0 @@
-FROM alpine:latest
-
-COPY ./import-server .
-
-ENTRYPOINT [ "./import-server" ]
