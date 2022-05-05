@@ -14,15 +14,32 @@ func (c *Client) UpdateModules(
 	domainID string,
 	modules ...*gois.Module,
 ) error {
-	domain, err := c.domainByID(ctx, userID, domainID)
-	if err != nil {
-		return fmt.Errorf("failed to get domain: %s", err)
+	if len(modules) == 0 {
+		return fmt.Errorf("no modules provided")
 	}
 
-	var h *gois.Host
+	if userID == "" {
+		return fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return fmt.Errorf("domainID is required")
+	}
+
+	domain, err := c.domainByID(ctx, userID, domainID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get domain by ID [%s] for user [%s]: %s",
+			domainID,
+			userID,
+			err,
+		)
+	}
+
+	h := &gois.Host{}
 	err = domain.DataTo(h)
 	if err != nil {
-		return fmt.Errorf("failed to get domain: %s", err)
+		return fmt.Errorf("failed to unmarshal domain: %s", err)
 	}
 
 	if h.Token.Validated == nil ||
@@ -55,6 +72,18 @@ func (c *Client) DeleteModule(
 	domainID string,
 	path string,
 ) error {
+	if userID == "" {
+		return fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return fmt.Errorf("domainID is required")
+	}
+
+	if path == "" {
+		return fmt.Errorf("path is required")
+	}
+
 	domain, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
 		return fmt.Errorf("failed to get domain: %s", err)

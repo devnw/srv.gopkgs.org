@@ -13,8 +13,8 @@ import (
 )
 
 type moduleData struct {
-	ID      string `json:"id"`
-	Modules []*gois.Module
+	ID      string         `json:"id"`
+	Modules []*gois.Module `json:"modules"`
 }
 
 func Module(c gois.DB, p *event.Publisher) (http.Handler, error) {
@@ -80,7 +80,7 @@ func (m *module) Post(
 	}
 
 	mdata := &moduleData{}
-	err = json.Unmarshal(data, m)
+	err = json.Unmarshal(data, mdata)
 	if err != nil {
 		return Err(r, err, "failed to unmarshal body")
 	}

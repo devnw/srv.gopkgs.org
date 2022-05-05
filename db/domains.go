@@ -19,15 +19,23 @@ func (c *Client) GetDomainForUser(
 	userID string,
 	domainID string,
 ) (*gois.Host, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return nil, fmt.Errorf("domainID is required")
+	}
+
 	domain, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get domain: %s", err)
+		return nil, fmt.Errorf("failed to get domain by ID: %s", err)
 	}
 
 	h := &gois.Host{}
 	err = domain.DataTo(h)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get domain: %s", err)
+		return nil, fmt.Errorf("failed to unmarshal domain: %s", err)
 	}
 
 	return h, nil
@@ -37,6 +45,10 @@ func (c *Client) GetDomainByName(
 	ctx context.Context,
 	domain string,
 ) (*gois.Host, error) {
+	if domain == "" {
+		return nil, fmt.Errorf("domain is required")
+	}
+
 	d, err := c.firestore.Collection("domains").Doc(domain).Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain: %s", err)
@@ -60,6 +72,10 @@ func (c *Client) GetDomains(
 	ctx context.Context,
 	userID string,
 ) ([]*gois.Host, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+
 	domains := []*gois.Host{}
 	iter := c.domains(ctx, userID).Documents(ctx)
 	for {
@@ -94,6 +110,14 @@ func (c *Client) CreateDomain(
 	userID string,
 	domain string,
 ) (*gois.Host, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+
+	if domain == "" {
+		return nil, fmt.Errorf("domain is required")
+	}
+
 	// TODO: set this up so that if a domain exists but is not validated it
 	// can be migrated to a new user and be validated.
 	// This should happen after the current token is expired or invalidated.
@@ -129,6 +153,14 @@ func (c *Client) DeleteDomain(
 	userID string,
 	domainID string,
 ) error {
+	if userID == "" {
+		return fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return fmt.Errorf("domainID is required")
+	}
+
 	domain, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
 		return fmt.Errorf("failed to get domain: %s", err)
@@ -147,6 +179,14 @@ func (c *Client) NewDomainToken(
 	userID string,
 	domainID string,
 ) (*dns.Token, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return nil, fmt.Errorf("domainID is required")
+	}
+
 	domainRef, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get domain: %s", err)
@@ -195,6 +235,14 @@ func (c *Client) UpdateDomainToken(
 	domainID string,
 	validated *time.Time,
 ) error {
+	if userID == "" {
+		return fmt.Errorf("userID is required")
+	}
+
+	if domainID == "" {
+		return fmt.Errorf("domainID is required")
+	}
+
 	domain, err := c.domainByID(ctx, userID, domainID)
 	if err != nil {
 		return fmt.Errorf("failed to get domain: %s", err)
