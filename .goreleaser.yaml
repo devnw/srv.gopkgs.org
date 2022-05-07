@@ -46,10 +46,10 @@ dockers:
     ids:
       - api
     image_templates:
-      - "devnw/gopkgs-api:latest"
-      - "devnw/gopkgs-api:{{ .Tag }}"
-      - "devnw/gopkgs-api:v{{ .Major }}"
-      - "gcr.io/gopkgs-342114/gopkgs/api:latest"
+      # - "devnw/gopkgs-api:latest"
+      # - "devnw/gopkgs-api:{{ .Tag }}"
+      # - "devnw/gopkgs-api:v{{ .Major }}"
+      # - "gcr.io/gopkgs-342114/gopkgs/api:latest"
       - "ghcr.io/devnw/gopkgs-api:latest"
     build_flag_templates:
       - "--pull"
@@ -71,10 +71,10 @@ dockers:
     ids:
       - import-server
     image_templates:
-      - "devnw/import-server:latest"
-      - "devnw/import-server:{{ .Tag }}"
-      - "devnw/import-server:v{{ .Major }}"
-      - "gcr.io/gopkgs-342114/gopkgs/import-server:latest"
+      # - "devnw/import-server:latest"
+      # - "devnw/import-server:{{ .Tag }}"
+      # - "devnw/import-server:v{{ .Major }}"
+      # - "gcr.io/gopkgs-342114/gopkgs/import-server:latest"
       - "ghcr.io/devnw/import-server:latest"
     build_flag_templates:
       - "--pull"
