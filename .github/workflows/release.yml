@@ -1,13 +1,18 @@
-name: "tagged-release"
+name: release
 
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+  packages: write
+  issues: write
+
 jobs:
   build:
-    name: "Build & Unit Tests"
+    name: "Build"
     strategy:
       matrix:
         go-version: [1.18]
@@ -15,19 +20,17 @@ jobs:
       fail-fast: true
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2.4.0
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
           stable: false
+      - name: Checkout code
+        uses: actions/checkout@v3
       - name: Build
         run: go build ./...
-      - name: Test
-        run: go test -race -failfast ./...
-  codeql:
-    name: "CodeQL Check"
+  test:
+    name: "Unit Tests"
     needs: [build]
     strategy:
       matrix:
@@ -37,24 +40,37 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2.4.0
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v1
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v3
         with:
-          languages: go
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v1
-  release:
-    needs: [build, codeql]
-    name: "Tagged Release"
-    runs-on: "ubuntu-latest"
+          go-version: ${{ matrix.go-version }}
+          stable: false
+      - name: Test
+        run: go test -failfast ./... -race -coverprofile=coverage.txt -covermode=atomic
+      - name: Push Coverage to codecov.io
+        uses: codecov/codecov-action@v2.1.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.txt
+  goreleaser:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2.4.0
-      - name: Create Github Release from Tag
-        uses: "marvinpinto/action-automatic-releases@latest"
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: false
-          files: |
-            LICENSE
+          fetch-depth: 0
+      - name: Fetch all tags
+        run: git fetch --force --tags
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

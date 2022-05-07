@@ -1,5 +1,5 @@
 FROM alpine:latest
 
-COPY import-server /
+COPY import-server /usr/bin/import-server
 
-ENTRYPOINT [ "import-server" ]
+ENTRYPOINT [ "/usr/bin/import-server" ]

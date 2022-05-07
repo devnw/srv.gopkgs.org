@@ -1,5 +1,5 @@
-FROM scratch
+FROM alpine:latest
 
-COPY gopkgs-api /
+COPY gopkgs-api /usr/bin/gopkgs-api
 
-ENTRYPOINT [ "/gopkgs-api" ]
+ENTRYPOINT [ "/usr/bin/gopkgs-api" ]
