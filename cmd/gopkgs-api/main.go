@@ -59,8 +59,8 @@ func main() {
 	)
 
 	root := &cobra.Command{
-		Use:     "import-server [flags]",
-		Short:   "import server for gopkgs",
+		Use:     "gopkgs-api [flags]",
+		Short:   "api server for api.gopkgs.org",
 		Version: version,
 		Run: exec(
 			&verbose,
@@ -90,7 +90,7 @@ func main() {
 
 	root.PersistentFlags().StringVar(
 		&logPrefix,
-		"log-prefix", "srv.gopkgs.org", "log prefix")
+		"log-prefix", "api.gopkgs.org", "log prefix")
 
 	root.PersistentFlags().StringVar(
 		&audience,
@@ -121,8 +121,8 @@ func exec(
 	domain *string,
 	emailClaim *string,
 ) func(cmd *cobra.Command, _ []string) {
-	var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", *domain)
 	return func(cmd *cobra.Command, _ []string) {
+		var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", *domain)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -143,26 +143,26 @@ func exec(
 
 		jwks, err := url.Parse(JWKs)
 		if err != nil {
-			alog.Fatalf(err, "failed to parse jwks url")
+			fmt.Printf("failed to parse jwks url: %s\n", err)
 			return
 		}
 
-		auth, err := api.Authenticator(ctx, jwks, *emailClaim, *audience)
+		auth, err := api.Authenticator(ctx, p, jwks, *emailClaim, *audience)
 		if err != nil {
-			alog.Fatalf(err, "failed to create authenticator")
+			fmt.Printf("failed to create authenticator: %s\n", err)
 			return
 		}
 
 		// Subscribe parent publisher to Authentication events and errors
 		err = p.Events(ctx, auth.ReadEvents(0))
 		if err != nil {
-			alog.Fatalf(err, "failed to subscribe to authentication events")
+			fmt.Printf("failed to subscribe to auth events: %s\n", err)
 			return
 		}
 
 		err = p.Errors(ctx, auth.ReadErrors(0))
 		if err != nil {
-			alog.Fatalf(err, "failed to subscribe to authentication errors")
+			fmt.Printf("failed to subscribe to auth errors: %s\n", err)
 			return
 		}
 
@@ -184,7 +184,7 @@ func exec(
 
 		router, err := registerHandlers(client, p)
 		if err != nil {
-			alog.Fatalf(err, "failed to register handlers")
+			fmt.Printf("failed to register handlers: %s\n", err)
 			return
 		}
 

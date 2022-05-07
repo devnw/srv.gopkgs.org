@@ -29,6 +29,7 @@ type Authentication struct {
 
 func Authenticator(
 	ctx context.Context,
+	p *event.Publisher,
 	jwksrc *url.URL,
 	emailClaim string,
 	audience string,
@@ -40,7 +41,7 @@ func Authenticator(
 		return nil, err
 	}
 
-	return &Authentication{event.NewPublisher(ctx), jwks, emailClaim, audience}, nil
+	return &Authentication{p, jwks, emailClaim, audience}, nil
 }
 
 // ValidateToken middleware verifies a valid Auth0 JWT token being present in the request.
