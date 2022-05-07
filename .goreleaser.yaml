@@ -2,6 +2,7 @@ before:
   hooks:
     - go mod tidy
     - go generate ./...
+    - pre-commit run --all-files --verbose
 builds:
   - id: api
     dir: cmd/gopkgs-api
