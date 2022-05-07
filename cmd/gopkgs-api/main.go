@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,10 +17,13 @@ import (
 	"go.devnw.com/gois"
 	"go.devnw.com/gois/api"
 	"go.devnw.com/gois/db"
+	"go.devnw.com/gois/secrets"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 const (
 	DEFAULTTIMEOUT = time.Hour * 24 * 7
+	DEFAULTPORT    = 2096
 )
 
 var version string
@@ -48,6 +53,7 @@ func configLogger(ctx context.Context, prefix string) error {
 
 func main() {
 	var (
+		port                uint16
 		verbose             bool
 		gcpProject          string
 		dnsChallengeKey     string
@@ -56,6 +62,8 @@ func main() {
 		audience            string
 		domain              string
 		emailClaim          string
+		certificate         string
+		key                 string
 	)
 
 	root := &cobra.Command{
@@ -63,6 +71,7 @@ func main() {
 		Short:   "api server for api.gopkgs.org",
 		Version: version,
 		Run: exec(
+			&port,
 			&verbose,
 			&gcpProject,
 			&dnsChallengeKey,
@@ -71,15 +80,21 @@ func main() {
 			&audience,
 			&domain,
 			&emailClaim,
+			&certificate,
+			&key,
 		),
 	}
+
+	root.PersistentFlags().Uint16VarP(
+		&port,
+		"port", "p", DEFAULTPORT, "enable global verbose logging")
 
 	root.PersistentFlags().BoolVarP(
 		&verbose,
 		"verbose", "v", false, "enable global verbose logging")
-	root.PersistentFlags().StringVarP(
+	root.PersistentFlags().StringVar(
 		&gcpProject,
-		"gcp-project", "p", "gopkgs-342114", "gcp project id")
+		"gcp-project", "gopkgs-342114", "gcp project id")
 	root.PersistentFlags().StringVarP(
 		&dnsChallengeKey,
 		"dns-key", "k", "gopkgs_domain_token", "dns challenge key prefix")
@@ -104,14 +119,23 @@ func main() {
 		&emailClaim,
 		"email-claim", "https://gopkgs.org/email_verified", "Email verification claim")
 
+	root.PersistentFlags().StringVar(
+		&certificate,
+		"cert", "api_gopkgs_org_cert", "x509 Certificate Key Location")
+	root.PersistentFlags().StringVar(
+		&key,
+		"key", "api_gopkgs_org_key", "x509 Certificate Key Location")
+
 	err := root.Execute()
 	if err != nil {
-		alog.Fatal(err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
+//nolint:funlen
 func exec(
+	port *uint16,
 	verbose *bool,
 	gcpProject *string,
 	dnsChallengeKey *string,
@@ -120,9 +144,12 @@ func exec(
 	audience *string,
 	domain *string,
 	emailClaim *string,
+	certificate *string,
+	key *string,
 ) func(cmd *cobra.Command, _ []string) {
 	return func(cmd *cobra.Command, _ []string) {
 		var JWKs = fmt.Sprintf("https://%s/.well-known/jwks.json", *domain)
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -188,8 +215,48 @@ func exec(
 			return
 		}
 
+		// Create a new secrets manager client.
+		sm, err := secrets.NewManager(ctx, *gcpProject)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer func() { _ = sm.Close() }()
+
+		certCache := gois.NewCache(
+			sm,
+			autocert.DirCache(
+				filepath.Join(os.TempDir(), *gcpProject),
+			),
+		)
+
+		cert, err := certCache.Get(ctx, *certificate)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		key, err := certCache.Get(ctx, *key)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		certificate, err := tls.X509KeyPair(cert, key)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		config := &tls.Config{
+			MinVersion:               tls.VersionTLS13,
+			Certificates:             []tls.Certificate{certificate},
+			PreferServerCipherSuites: true,
+		}
+
 		server := &http.Server{
-			Addr: ":6060",
+			Addr:      fmt.Sprintf(":%v", *port),
+			TLSConfig: config,
 			Handler: api.JSON(
 				auth.ValidateToken(
 					router,
@@ -198,7 +265,7 @@ func exec(
 		}
 
 		alog.Printf("API server listening on %s", server.Addr)
-		alog.Fatal(server.ListenAndServe())
+		fmt.Println(server.ListenAndServeTLS("", ""))
 	}
 }
 

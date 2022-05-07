@@ -124,6 +124,7 @@ func exec(
 		sm, err := secrets.NewManager(ctx, *gcpProject)
 		if err != nil {
 			alog.Fatal(err)
+			return
 		}
 
 		defer func() {
@@ -160,6 +161,7 @@ func exec(
 		)
 		if err != nil {
 			alog.Fatal(err)
+			return
 		}
 
 		mux := http.NewServeMux()
@@ -168,6 +170,7 @@ func exec(
 		err = http.Serve(dm.Listener(ctx), mux)
 		if err != nil {
 			alog.Fatal(err)
+			return
 		}
 	}
 }
