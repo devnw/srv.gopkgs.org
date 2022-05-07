@@ -74,7 +74,7 @@ func main() {
 		"verbose", "v", false, "enable global verbose logging")
 	root.PersistentFlags().StringVarP(
 		&gcpProject,
-		"gcp-project", "p", "", "gcp project id")
+		"gcp-project", "p", "gopkgs-342114", "gcp project id")
 	root.PersistentFlags().StringVarP(
 		&dnsChallengeKey,
 		"dns-key", "k", "gopkgs_domain_token", "dns challenge key prefix")

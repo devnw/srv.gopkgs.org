@@ -35,7 +35,7 @@ func Authenticator(
 ) (*Authentication, error) {
 	// fetch and parse the tenant JSON Web Keys (JWK). The keys are used for JWT
 	// token validation during requests authorization.
-	jwks, err := jwk.Fetch(context.Background(), jwksrc.String())
+	jwks, err := jwk.Fetch(ctx, jwksrc.String())
 	if err != nil {
 		return nil, err
 	}
