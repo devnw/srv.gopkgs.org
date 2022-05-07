@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	cloud.google.com/go/firestore v1.6.1
-	cloud.google.com/go/secretmanager v1.2.0
+	cloud.google.com/go/secretmanager v1.4.0
 	github.com/google/uuid v1.3.0
 	github.com/lestrrat-go/jwx v1.2.20
 	go.devnw.com/alog v1.1.1
@@ -18,7 +18,7 @@ require (
 require (
 	cloud.google.com/go v0.100.2 // indirect
 	cloud.google.com/go/compute v1.6.1 // indirect
-	cloud.google.com/go/iam v0.1.0 // indirect
+	cloud.google.com/go/iam v0.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.0-20210816181553-5444fa50b93d // indirect
 	github.com/goccy/go-json v0.9.4 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
