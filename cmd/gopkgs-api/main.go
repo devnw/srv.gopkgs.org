@@ -122,6 +122,7 @@ func main() {
 	root.PersistentFlags().StringVar(
 		&certificate,
 		"cert", "api_gopkgs_org_cert", "x509 Certificate Key Location")
+
 	root.PersistentFlags().StringVar(
 		&key,
 		"key", "api_gopkgs_org_key", "x509 Certificate Key Location")
