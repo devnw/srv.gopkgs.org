@@ -206,6 +206,11 @@ func (dm *DomainManager) Listener(ctx context.Context) net.Listener {
 // The returned error is accessible via tls.Conn.Handshake and its callers.
 // See Manager's HostPolicy field and GetCertificate method docs for more details.
 func (dm *DomainManager) HostPolicy(ctx context.Context, domain string) error {
+	ip := net.ParseIP(domain)
+	if ip != nil {
+		return errors.New("domain is an IP address")
+	}
+
 	host, err := dm.VerifyHost(ctx, domain)
 	if err != nil {
 		return err

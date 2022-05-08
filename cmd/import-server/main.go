@@ -165,7 +165,7 @@ func exec(
 		}
 
 		mux := http.NewServeMux()
-		mux.HandleFunc("/", dm.Handler)
+		mux.Handle("/", api.PanicHandler(http.HandlerFunc(dm.Handler)))
 
 		err = http.Serve(dm.Listener(ctx), mux)
 		if err != nil {

@@ -258,10 +258,12 @@ func exec(
 		server := &http.Server{
 			Addr:      fmt.Sprintf(":%v", *port),
 			TLSConfig: config,
-			Handler: api.CORS(
-				api.JSON(
-					auth.ValidateToken(
-						router,
+			Handler: api.PanicHandler(
+				api.CORS(
+					api.JSON(
+						auth.ValidateToken(
+							router,
+						),
 					),
 				),
 			),
