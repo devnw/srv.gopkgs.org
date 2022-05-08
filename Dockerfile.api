@@ -2,4 +2,4 @@ FROM alpine:latest
 
 COPY gopkgs-api /usr/bin/gopkgs-api
 
-ENTRYPOINT [ "/usr/bin/gopkgs-api" ]
+ENTRYPOINT [ "/usr/bin/gopkgs-api", "-v" ]
