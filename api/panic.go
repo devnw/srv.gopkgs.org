@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"runtime/debug"
 
 	"go.devnw.com/alog"
 )
@@ -14,7 +15,7 @@ func PanicHandler(next http.Handler) http.Handler {
 			if r != nil {
 				alog.Crit(Err(
 					req,
-					fmt.Errorf("%s", r),
+					fmt.Errorf("%s\nSTACK:\n%s", r, string(debug.Stack())),
 					"panic while serving request",
 				))
 				w.WriteHeader(http.StatusInternalServerError)
