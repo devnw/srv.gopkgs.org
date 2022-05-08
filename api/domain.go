@@ -162,11 +162,12 @@ func NewDomainManager(
 	r dns.Resolver,
 ) (*DomainManager, error) {
 	return &DomainManager{
-		ctx:   ctx,
-		p:     p,
-		db:    datab,
-		certs: certs, // pragma: allowlist secret
-		cache: map[string]*gois.Host{},
+		ctx:      ctx,
+		p:        p,
+		db:       datab,
+		certs:    certs, // pragma: allowlist secret
+		cache:    map[string]*gois.Host{},
+		resolver: r,
 	}, nil
 }
 
