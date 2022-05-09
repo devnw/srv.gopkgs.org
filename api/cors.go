@@ -12,6 +12,14 @@ var allowed = []string{
 	"http://localhost:3000",
 }
 
+var allowedMethods = []string{
+	http.MethodGet,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodDelete,
+	http.MethodOptions,
+}
+
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Origin
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -34,6 +42,13 @@ func CORS(next http.Handler) http.Handler {
 			"Access-Control-Allow-Headers",
 			"Authorization,Content-Type",
 		)
+
+		// add the allowed methods
+		rw.Header().Add(
+			"Access-Control-Allow-Methods",
+			strings.Join(allowedMethods, ","),
+		)
+
 		rw.WriteHeader(http.StatusNoContent)
 		alog.Printf("CORS preflight request for %s completed", req.Header.Get("Origin"))
 	})
