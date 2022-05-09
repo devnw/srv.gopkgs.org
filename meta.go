@@ -66,7 +66,7 @@ func (h *Host) MarshalJSON() ([]byte, error) {
 		Token      string    `json:"token"`
 		Validated  bool      `json:"validated"`
 		ValidateBy time.Time `json:"validate_by"`
-		Modules    []*Module
+		Modules    []*Module `json:"modules"`
 	}{
 		ID:         h.ID,
 		Domain:     h.Domain,
