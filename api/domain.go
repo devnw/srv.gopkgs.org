@@ -260,7 +260,7 @@ func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the module handler
-	err := module.Handle(w, r)
+	err := module.Handle(w, r, host.Domain)
 	if err != nil {
 		dm.p.ErrorFunc(dm.ctx, func() error {
 			return err

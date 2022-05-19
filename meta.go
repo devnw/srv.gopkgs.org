@@ -92,11 +92,10 @@ func (h *Host) MarshalJSON() ([]byte, error) {
 }
 
 type Module struct {
-	Domain string `firestore:"-"`
-	Path   string
-	Proto  Protocol
-	Repo   *url.URL
-	Docs   *url.URL
+	Path  string
+	Proto Protocol
+	Repo  *url.URL
+	Docs  *url.URL
 }
 
 //go:embed template.go.html
@@ -104,7 +103,11 @@ var fs embed.FS
 
 var tmpl = template.Must(template.ParseFS(fs, "template.go.html"))
 
-func (m *Module) Handle(w http.ResponseWriter, r *http.Request) error {
+func (m *Module) Handle(
+	w http.ResponseWriter,
+	r *http.Request,
+	domain string,
+) error {
 	// Redirect the user to the documentation address if available
 	if r.URL.Query().Get("go-get") == "1" {
 		err := tmpl.Execute(w, m)
@@ -130,8 +133,8 @@ func (m *Module) Handle(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (m *Module) ModImport() string {
-	return fmt.Sprintf("%s/%s", m.Domain, m.Path)
+func (m *Module) ModImport(domain string) string {
+	return fmt.Sprintf("%s/%s", domain, m.Path)
 }
 
 func (m Module) MarshalJSON() ([]byte, error) {
