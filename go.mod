@@ -12,7 +12,7 @@ require (
 	go.devnw.com/dns v0.0.0-20220330093213-1853639c6508
 	go.devnw.com/event v1.0.2
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
-	google.golang.org/api v0.78.0
+	google.golang.org/api v0.80.0
 	google.golang.org/genproto v0.0.0-20220505152158-f39f71e6c8f3
 )
 
