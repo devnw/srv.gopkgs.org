@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v2.0.3
   build:
-    name: "Build"
+    name: 'Build'
     needs: [pre-commit]
     strategy:
       matrix:
@@ -28,13 +28,12 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
-          stable: false
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Build
         run: go build ./...
   test:
-    name: "Unit Tests"
+    name: 'Unit Tests'
     needs: [build]
     strategy:
       matrix:
@@ -49,7 +48,6 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
-          stable: false
       - name: Test
         run: go test -failfast ./... -race -coverprofile=coverage.txt -covermode=atomic
       - name: Push Coverage to codecov.io
