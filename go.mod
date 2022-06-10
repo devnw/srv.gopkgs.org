@@ -11,6 +11,7 @@ require (
 	go.devnw.com/alog v1.1.1
 	go.devnw.com/dns v0.0.0-20220330093213-1853639c6508
 	go.devnw.com/event v1.0.2
+	go.devnw.com/ttl v1.1.0
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
 	google.golang.org/api v0.83.0
 	google.golang.org/genproto v0.0.0-20220602131408-e326c6e8e9c8
@@ -34,7 +35,6 @@ require (
 	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	go.devnw.com/ttl v1.1.0 // indirect
 	go.devnw.com/validator v1.0.8 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
