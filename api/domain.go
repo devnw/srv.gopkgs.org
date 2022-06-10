@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +16,7 @@ import (
 	"go.devnw.com/dns"
 	"go.devnw.com/event"
 	"go.devnw.com/gois"
+	"go.devnw.com/ttl"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -160,13 +160,14 @@ func NewDomainManager(
 	datab gois.DB,
 	certs gois.KVStore,
 	r dns.Resolver,
+	cacheTimeout time.Duration,
 ) (*DomainManager, error) {
 	return &DomainManager{
 		ctx:      ctx,
 		p:        p,
 		db:       datab,
 		certs:    certs, // pragma: allowlist secret
-		cache:    map[string]*gois.Host{},
+		cache:    ttl.NewCache[string, *gois.Host](ctx, cacheTimeout, true),
 		resolver: r,
 	}, nil
 }
@@ -179,8 +180,7 @@ type DomainManager struct {
 	dirCache autocert.DirCache
 	resolver dns.Resolver
 
-	cache   map[string]*gois.Host
-	cacheMu sync.RWMutex
+	cache *ttl.Cache[string, *gois.Host]
 }
 
 func (dm *DomainManager) Listener(ctx context.Context) net.Listener {
@@ -217,46 +217,73 @@ func (dm *DomainManager) HostPolicy(ctx context.Context, domain string) error {
 		return err
 	}
 
-	// Cache Host
-	dm.cacheMu.Lock()
-	defer dm.cacheMu.Unlock()
+	err = dm.cache.Set(ctx, host.Domain, host)
+	if err != nil {
+		return err
+	}
 
-	dm.cache[host.Domain] = host
+	return nil
+}
+
+func (dm *DomainManager) refreshHost(ctx context.Context, domain string) error {
+	host, err := dm.VerifyHost(dm.ctx, domain)
+	if err != nil {
+		return err
+	}
+
+	// Set the host in the cache.
+	err = dm.cache.Set(ctx, host.Domain, host)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	// Check cache
-	dm.cacheMu.RLock()
-	host, ok := dm.cache[r.TLS.ServerName]
-	dm.cacheMu.RUnlock()
-
+	host, ok := dm.cache.Get(r.Context(), r.TLS.ServerName)
 	if !ok {
-		var err error
-		host, err = dm.VerifyHost(dm.ctx, r.TLS.ServerName)
+		err := dm.refreshHost(dm.ctx, r.TLS.ServerName)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			dm.p.ErrorFunc(dm.ctx, func() error {
-				return fmt.Errorf("Failed to verify host: %v", err)
+				return fmt.Errorf(
+					"Error while verifying/refreshing host: %v",
+					err,
+				)
 			})
 			return
 		}
-
-		// Add to the cache
-		dm.cacheMu.Lock()
-		dm.cache[host.Domain] = host
-		dm.cacheMu.Unlock()
 	}
 
 	modPath := strings.TrimPrefix(r.URL.Path, "/")
 	module, ok := host.Modules[modPath]
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		dm.p.ErrorFunc(dm.ctx, func() error {
-			return fmt.Errorf("No module for %s %s", host.Domain, modPath)
-		})
-		return
+		err := dm.refreshHost(dm.ctx, r.TLS.ServerName)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			dm.p.ErrorFunc(dm.ctx, func() error {
+				return fmt.Errorf(
+					"Error while verifying/refreshing host: %v",
+					err,
+				)
+			})
+			return
+		}
+
+		module, ok = host.Modules[modPath]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			dm.p.ErrorFunc(dm.ctx, func() error {
+				return fmt.Errorf(
+					"Module not found for path %s/%s",
+					host.Domain,
+					modPath,
+				)
+			})
+			return
+		}
 	}
 
 	// Execute the module handler

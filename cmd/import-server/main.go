@@ -21,6 +21,7 @@ import (
 )
 
 const DEFAULTTIMEOUT time.Duration = time.Hour * 24 * 7
+const CACHETIMEOUT time.Duration = time.Minute * 5
 
 var version string
 var resolver dns.Resolver = net.DefaultResolver
@@ -53,6 +54,7 @@ func main() {
 		gcpProject          string
 		dnsChallengeKey     string
 		dnsChallengeTimeout time.Duration
+		cacheTimeout        time.Duration
 		logPrefix           string
 	)
 
@@ -66,6 +68,7 @@ func main() {
 			&dnsChallengeKey,
 			&dnsChallengeTimeout,
 			&logPrefix,
+			&cacheTimeout,
 		),
 	}
 
@@ -81,7 +84,11 @@ func main() {
 
 	root.PersistentFlags().DurationVar(
 		&dnsChallengeTimeout,
-		"dns-token-timeout", DEFAULTTIMEOUT, "enable global verbose logging")
+		"dns-token-timeout", DEFAULTTIMEOUT, "dns token timeout")
+
+	root.PersistentFlags().DurationVar(
+		&cacheTimeout,
+		"cache-timeout", CACHETIMEOUT, "host cache timeout")
 
 	root.PersistentFlags().StringVar(
 		&logPrefix,
@@ -100,6 +107,7 @@ func exec(
 	dnsChallengeKey *string,
 	dnsChallengeTimeout *time.Duration,
 	logPrefix *string,
+	cacheTimeout *time.Duration,
 ) func(cmd *cobra.Command, _ []string) {
 	return func(cmd *cobra.Command, _ []string) {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -158,6 +166,7 @@ func exec(
 				),
 			),
 			resolver,
+			*cacheTimeout,
 		)
 		if err != nil {
 			alog.Fatal(err)
