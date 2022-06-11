@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"text/template"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 )
 
 const GOPKGS = "https://gopkgs.org"
+const SCHEME = "https"
 
 type Protocol string
 
@@ -186,15 +188,25 @@ func (m *Module) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("invalid protocol: %s", mod.Proto)
 	}
 
-	m.Repo, err = url.Parse(mod.Repo)
+	m.Repo, err = url.Parse(strings.TrimSpace(mod.Repo))
 	if err != nil {
 		return err
 	}
 
+	// Ensure the URL is an https URL
+	if m.Repo.Scheme != SCHEME {
+		return fmt.Errorf("invalid repo URL scheme: %s", m.Repo.Scheme)
+	}
+
 	if mod.Docs != "" {
-		m.Docs, err = url.Parse(mod.Docs)
+		m.Docs, err = url.Parse(strings.TrimSpace(mod.Docs))
 		if err != nil {
 			return err
+		}
+
+		// Ensure the URL is an https URL
+		if m.Docs.Scheme != SCHEME {
+			return fmt.Errorf("invalid docs URL scheme: %s", m.Docs.Scheme)
 		}
 	}
 
