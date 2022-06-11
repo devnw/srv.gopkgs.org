@@ -56,6 +56,7 @@ func main() {
 		dnsChallengeTimeout time.Duration
 		cacheTimeout        time.Duration
 		logPrefix           string
+		redirectURL         string
 	)
 
 	root := &cobra.Command{
@@ -69,6 +70,7 @@ func main() {
 			&dnsChallengeTimeout,
 			&logPrefix,
 			&cacheTimeout,
+			&redirectURL,
 		),
 	}
 
@@ -94,6 +96,10 @@ func main() {
 		&logPrefix,
 		"log-prefix", "srv.gopkgs.org", "log prefix")
 
+	root.PersistentFlags().StringVar(
+		&redirectURL,
+		"redirect-url", "https://gopkgs.org", "redirect URL for errors")
+
 	err := root.Execute()
 	if err != nil {
 		alog.Fatal(err)
@@ -108,6 +114,7 @@ func exec(
 	dnsChallengeTimeout *time.Duration,
 	logPrefix *string,
 	cacheTimeout *time.Duration,
+	redirectURL *string,
 ) func(cmd *cobra.Command, _ []string) {
 	return func(cmd *cobra.Command, _ []string) {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -167,6 +174,7 @@ func exec(
 			),
 			resolver,
 			*cacheTimeout,
+			*redirectURL,
 		)
 		if err != nil {
 			alog.Fatal(err)

@@ -161,24 +161,26 @@ func NewDomainManager(
 	certs gois.KVStore,
 	r dns.Resolver,
 	cacheTimeout time.Duration,
+	redirectURL string,
 ) (*DomainManager, error) {
 	return &DomainManager{
-		ctx:      ctx,
-		p:        p,
-		db:       datab,
-		certs:    certs, // pragma: allowlist secret
-		cache:    ttl.NewCache[string, *gois.Host](ctx, cacheTimeout, true),
-		resolver: r,
+		ctx:         ctx,
+		p:           p,
+		db:          datab,
+		certs:       certs, // pragma: allowlist secret
+		cache:       ttl.NewCache[string, *gois.Host](ctx, cacheTimeout, true),
+		resolver:    r,
+		redirectURL: redirectURL,
 	}, nil
 }
 
 type DomainManager struct {
-	ctx      context.Context
-	p        *event.Publisher
-	db       gois.DB
-	certs    gois.KVStore
-	dirCache autocert.DirCache
-	resolver dns.Resolver
+	ctx         context.Context
+	p           *event.Publisher
+	db          gois.DB
+	certs       gois.KVStore
+	resolver    dns.Resolver
+	redirectURL string
 
 	cache *ttl.Cache[string, *gois.Host]
 }
@@ -193,10 +195,7 @@ func (dm *DomainManager) Listener(ctx context.Context) net.Listener {
 	l := m.Listener()
 	go func() {
 		<-ctx.Done()
-		err := l.Close()
-		if err != nil {
-			// TODO: log
-		}
+		_ = l.Close()
 	}()
 
 	return l
@@ -241,12 +240,17 @@ func (dm *DomainManager) refreshHost(ctx context.Context, domain string) error {
 }
 
 func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			http.Redirect(w, r, dm.redirectURL, http.StatusSeeOther)
+		}
+	}()
 	// Check cache
 	host, ok := dm.cache.Get(r.Context(), r.TLS.ServerName)
 	if !ok {
-		err := dm.refreshHost(dm.ctx, r.TLS.ServerName)
+		err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
 			dm.p.ErrorFunc(dm.ctx, func() error {
 				return fmt.Errorf(
 					"Error while verifying/refreshing host: %v",
@@ -260,9 +264,8 @@ func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	modPath := strings.TrimPrefix(r.URL.Path, "/")
 	module, ok := host.Modules[modPath]
 	if !ok {
-		err := dm.refreshHost(dm.ctx, r.TLS.ServerName)
+		err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
 			dm.p.ErrorFunc(dm.ctx, func() error {
 				return fmt.Errorf(
 					"Error while verifying/refreshing host: %v",
@@ -287,7 +290,7 @@ func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the module handler
-	err := module.Handle(w, r, host.Domain)
+	err = module.Handle(w, r, host.Domain)
 	if err != nil {
 		dm.p.ErrorFunc(dm.ctx, func() error {
 			return err
