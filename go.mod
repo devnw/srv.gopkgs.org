@@ -9,7 +9,7 @@ require (
 	github.com/lestrrat-go/jwx v1.2.25
 	github.com/spf13/cobra v1.4.0
 	go.devnw.com/alog v1.1.1
-	go.devnw.com/dns v0.0.0-20220330093213-1853639c6508
+	go.devnw.com/dns v0.0.0-20220507134132-daf350169fad
 	go.devnw.com/event v1.0.2
 	go.devnw.com/ttl v1.1.0
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
