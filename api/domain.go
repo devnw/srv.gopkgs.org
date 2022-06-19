@@ -97,6 +97,9 @@ func (d *domain) Put(t jwt.Token, w http.ResponseWriter, r *http.Request) error 
 		return Err(r, err, "failed to unmarshal domain")
 	}
 
+	// Clean up the domain a bit.
+	domain.Domain = strings.ToLower(strings.TrimSpace(domain.Domain))
+
 	err = domain.validate()
 	if err != nil {
 		return Err(r, err, "failed to validate domain")
