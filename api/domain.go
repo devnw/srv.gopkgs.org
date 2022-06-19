@@ -224,19 +224,19 @@ func (dm *DomainManager) HostPolicy(ctx context.Context, domain string) error {
 	return nil
 }
 
-func (dm *DomainManager) refreshHost(ctx context.Context, domain string) error {
+func (dm *DomainManager) refreshHost(ctx context.Context, domain string) (*gois.Host, error) {
 	host, err := dm.VerifyHost(dm.ctx, domain)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Set the host in the cache.
 	err = dm.cache.Set(ctx, host.Domain, host)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return host, nil
 }
 
 func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
@@ -249,7 +249,7 @@ func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	// Check cache
 	host, ok := dm.cache.Get(r.Context(), r.TLS.ServerName)
 	if !ok {
-		err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
+		host, err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
 		if err != nil {
 			dm.p.ErrorFunc(dm.ctx, func() error {
 				return fmt.Errorf(
@@ -264,7 +264,7 @@ func (dm *DomainManager) Handler(w http.ResponseWriter, r *http.Request) {
 	modPath := strings.TrimPrefix(r.URL.Path, "/")
 	module, ok := host.Modules[modPath]
 	if !ok {
-		err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
+		host, err = dm.refreshHost(dm.ctx, r.TLS.ServerName)
 		if err != nil {
 			dm.p.ErrorFunc(dm.ctx, func() error {
 				return fmt.Errorf(
