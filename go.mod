@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/secretmanager v1.4.0
 	github.com/google/uuid v1.3.0
 	github.com/lestrrat-go/jwx v1.2.25
-	github.com/spf13/cobra v1.4.0
+	github.com/spf13/cobra v1.5.0
 	go.devnw.com/alog v1.1.1
 	go.devnw.com/dns v0.0.0-20220507134132-daf350169fad
 	go.devnw.com/event v1.0.2
