@@ -248,8 +248,8 @@ go.devnw.com/dns v0.0.0-20220507134132-daf350169fad h1:g+b2v9eQEO4Csb12PYKwMRO2D
 go.devnw.com/dns v0.0.0-20220507134132-daf350169fad/go.mod h1:864iBoCgUbZyY8/cYHDayl+wDXKVCluEafl2hsgfv5g=
 go.devnw.com/event v1.0.2 h1:bp1xhBta4MoWX41bnFetzHAIe8aiOFfzYn8X8rah4xY=
 go.devnw.com/event v1.0.2/go.mod h1:wc9P8ENcNDAxrIaOdqfPKgNbDwYcuvgYK60KgM61o3s=
-go.devnw.com/ttl v1.1.0 h1:j5gT6NGBZW3djM2fpXyCL7wbSpA1dtnrgnP+2VA6Pko=
-go.devnw.com/ttl v1.1.0/go.mod h1:sKrIsTL21mdmqR6Pf1bUtzq/1gA/DCiUkkQHTyzPIkE=
+go.devnw.com/ttl v1.1.2 h1:Sww0Ia23MZE6sJELJIHILYK0YmdJcGSTA7GEOjuAx3k=
+go.devnw.com/ttl v1.1.2/go.mod h1:sKrIsTL21mdmqR6Pf1bUtzq/1gA/DCiUkkQHTyzPIkE=
 go.devnw.com/validator v1.0.8 h1:IUuu8o7WKZPf5WsiUWvdU7qwBZvWwKezpZQnXn2gX+k=
 go.devnw.com/validator v1.0.8/go.mod h1:5kfqytQCBGTupXx1ZoIfV97qvKtsAi6lt2HfmvjWa6A=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
