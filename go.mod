@@ -11,7 +11,7 @@ require (
 	go.devnw.com/alog v1.1.1
 	go.devnw.com/dns v0.0.0-20220507134132-daf350169fad
 	go.devnw.com/event v1.0.2
-	go.devnw.com/ttl v1.1.0
+	go.devnw.com/ttl v1.1.2
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
 	google.golang.org/api v0.85.0
 	google.golang.org/genproto v0.0.0-20220617124728-180714bec0ad
