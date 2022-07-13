@@ -13,7 +13,7 @@ require (
 	go.devnw.com/event v1.0.2
 	go.devnw.com/ttl v1.1.2
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
-	google.golang.org/api v0.86.0
+	google.golang.org/api v0.87.0
 	google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f
 )
 
